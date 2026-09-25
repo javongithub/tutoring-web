@@ -17,6 +17,7 @@ import Waitlist from './pages/admin/Waitlist.jsx';
 import WaitlistEntry from './pages/public/WaitlistEntry.jsx';
 import Invoices from './pages/admin/Invoices.jsx';
 import Invoice from './pages/public/Invoice.jsx';
+import Report from './pages/public/Report.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/family/:token" element={<Family />} />
         <Route path="/waitlist/:token" element={<WaitlistEntry />} />
         <Route path="/invoice/:token" element={<Invoice />} />
+        <Route path="/report/:token" element={<Report />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="calendar" element={<Calendar />} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { del, get, patch, post } from '../../api.js';
+import ReportsCard from '../../components/Reports.jsx';
 import { DAYS_LONG, STATUS_LABEL, copy, fmtTime, fmtWhen, money, useLoad } from '../../util.js';
 import SessionModal from '../../components/SessionModal.jsx';
 import { ErrorText, Loading, Stat, StatusPill, useAction } from '../../components/ui.jsx';
@@ -31,6 +32,7 @@ export default function Student() {
       <div className="two-col">
         <div>
           <NotesCard st={st} onSaved={reload} />
+          <ReportsCard st={st} reports={data.reports} aiEnabled={data.ai_enabled} onChanged={reload} />
           <section className="card">
             <h2>Upcoming</h2>
             {data.upcoming.length === 0 && <p className="muted">Nothing scheduled.</p>}

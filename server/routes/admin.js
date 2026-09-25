@@ -24,7 +24,7 @@ const CHANGE_SELECT = `
 // A session earns money if it happened, or if it was a billed late cancel / no-show.
 const BILLABLE = "(s.status = 'completed' OR s.charged = 1)";
 
-export default function adminRoutes(db, { gcalEmail = null, onChange = () => {}, notify } = {}) {
+export default function adminRoutes(db, { gcalEmail = null, onChange = () => {}, notify, reporter, aiEnabled = false } = {}) {
   const r = Router();
   const one = (sql, ...a) => db.prepare(sql).get(...a);
   const all = (sql, ...a) => db.prepare(sql).all(...a);
@@ -381,6 +381,63 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     res.json(getInvoice(inv.id));
   });
 
+  // ---------- Progress reports ----------
+  const getReport = (id) => {
+    const rep = one('SELECT r.*, st.name AS student_name, st.email, st.parent_name, st.portal_token FROM reports r JOIN students st ON st.id = r.student_id WHERE r.id = ?', id);
+    if (!rep) throw notFound('Report not found');
+    return rep;
+  };
+
+  // Draft a report for a date range: AI-written from session notes, or blank to write yourself.
+  r.post('/students/:id/reports', async (req, res) => {
+    const st = getStudent(int(req.params.id));
+    const to = isDate(req.body.to) ? req.body.to : today();
+    const from = isDate(req.body.from) ? req.body.from : addDays(to, -30);
+    if (from > to) throw bad('Start date must be before end date');
+    let body = '';
+    let source = 'manual';
+    if (bool(req.body.ai)) {
+      if (!aiEnabled) throw bad('AI drafting isn’t set up: add ANTHROPIC_API_KEY to the server’s .env and restart.');
+      const sessions = all(
+        `SELECT * FROM sessions WHERE student_id = ? AND status IN ('completed','no_show') AND start_at >= ? AND start_at < ? ORDER BY start_at`,
+        st.id, `${from}T00:00`, `${addDays(to, 1)}T00:00`,
+      );
+      try {
+        body = (await reporter.draft(st, sessions, from, to)).body;
+      } catch (e) {
+        throw Object.assign(new Error(e.message), { status: e.status || 502, expose: true });
+      }
+      source = 'ai';
+    }
+    const id = db.prepare('INSERT INTO reports (student_id, period_from, period_to, body, source, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(st.id, from, to, body, source, newToken(), nowLocal()).lastInsertRowid;
+    res.status(201).json(getReport(Number(id)));
+  });
+
+  r.patch('/reports/:id', (req, res) => {
+    const rep = getReport(int(req.params.id));
+    db.prepare('UPDATE reports SET body = ? WHERE id = ?').run(str(req.body.body, 8000), rep.id);
+    res.json(getReport(rep.id));
+  });
+
+  r.delete('/reports/:id', (req, res) => {
+    const rep = getReport(int(req.params.id));
+    if (rep.status === 'sent') throw bad('Sent reports can’t be deleted (the family can already see it)');
+    db.prepare('DELETE FROM reports WHERE id = ?').run(rep.id);
+    res.json({ ok: true });
+  });
+
+  // Publish to the family page and email it (if they have an email and SMTP is set up).
+  r.post('/reports/:id/send', (req, res) => {
+    const rep = getReport(int(req.params.id));
+    if (!rep.body.trim()) throw bad('The report is empty');
+    db.prepare("UPDATE reports SET status = 'sent', sent_at = ? WHERE id = ?").run(nowLocal(), rep.id);
+    notify.family(rep.email, `${rep.student_name}'s progress report`,
+      `Hi ${rep.parent_name || 'there'},\n\n${rep.body}\n\nYou can also read it on your family page:`,
+      { path: `/report/${rep.token}`, reqOrigin: origin(req), force: true });
+    res.json({ ...getReport(rep.id), emailed: !!(rep.email && notify.emailEnabled) });
+  });
+
   // ---------- Waitlist ----------
   r.get('/waitlist', (_req, res) => {
     res.json(all("SELECT * FROM waitlist ORDER BY status = 'active' DESC, created_at LIMIT 300"));
@@ -436,6 +493,8 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     const st = getStudent(int(req.params.id));
     res.json({
       student: st,
+      ai_enabled: aiEnabled,
+      reports: all('SELECT * FROM reports WHERE student_id = ? ORDER BY created_at DESC LIMIT 24', st.id),
       rules: all('SELECT * FROM recurring WHERE student_id = ? ORDER BY active DESC, weekday, start_time', st.id),
       // History = anything that already happened, plus cancellations/requests at any date.
       sessions: all(`${SESSION_SELECT} WHERE s.student_id = ? AND (s.start_at <= ? OR s.status <> 'confirmed') ORDER BY s.start_at DESC LIMIT 200`,

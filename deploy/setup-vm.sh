@@ -65,6 +65,8 @@ SMTP_USER=
 SMTP_PASS=
 # Google Calendar push (optional): path to the service account JSON key
 GOOGLE_SERVICE_ACCOUNT_JSON=
+# AI-drafted progress reports (optional): https://console.anthropic.com
+ANTHROPIC_API_KEY=
 ENV
   chown "$APP_USER:" "$APP_DIR/.env" && chmod 600 "$APP_DIR/.env"
 else

@@ -6,9 +6,11 @@ import { authConfig, makeAuth } from './auth.js';
 import adminRoutes from './routes/admin.js';
 import publicRoutes from './routes/public.js';
 import { createNotifier } from './lib/notify.js';
+import { aiAvailable, createReporter } from './lib/reports.js';
 
 export function createApp(db, {
   auth = makeAuth(authConfig()), onChange = () => {}, gcalEmail = null, notify = createNotifier(db),
+  reporter = createReporter(), aiEnabled = aiAvailable(),
 } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -30,7 +32,7 @@ export function createApp(db, {
     next();
   });
   app.use('/api/public', publicRoutes(db, notify));
-  app.use('/api/admin', auth.requireAdmin, adminRoutes(db, { gcalEmail, onChange, notify }));
+  app.use('/api/admin', auth.requireAdmin, adminRoutes(db, { gcalEmail, onChange, notify, reporter, aiEnabled }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
   const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -42,8 +44,9 @@ export function createApp(db, {
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
     const status = err.status || (err.type === 'entity.parse.failed' ? 400 : 500);
-    if (status >= 500) console.error(err);
-    res.status(status).json({ error: status >= 500 ? 'Something went wrong' : err.message });
+    if (status >= 500 && !err.expose) console.error(err);
+    // 5xx messages are hidden unless the error is marked safe to show (e.g. "AI service busy").
+    res.status(status).json({ error: status >= 500 && !err.expose ? 'Something went wrong' : err.message });
   });
   return app;
 }

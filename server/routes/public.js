@@ -77,6 +77,17 @@ export default function publicRoutes(db, notify) {
     });
   });
 
+  // ---------- Progress reports ----------
+  r.get('/report/:token', (req, res) => {
+    const rep = one(
+      `SELECT r.body, r.period_from, r.period_to, r.sent_at, st.name AS student, st.portal_token
+         FROM reports r JOIN students st ON st.id = r.student_id WHERE r.token = ? AND r.status = 'sent'`,
+      String(req.params.token),
+    );
+    if (!rep) throw notFound('Report not found');
+    res.json({ ...rep, tutor_name: getSettings(db).tutor_name });
+  });
+
   // ---------- Invoices ----------
   r.get('/invoice/:token', (req, res) => {
     const inv = invoiceDetail(db, 'i.token = ?', String(req.params.token));
@@ -269,6 +280,7 @@ export default function publicRoutes(db, notify) {
       parent: fam.parent_name,
       cancel_notice_hours: getSettings(db).cancel_notice_hours,
       upcoming: rows.filter((s) => s.end_at > now && s.status !== 'cancelled').map(publicSession),
+      reports: db.prepare("SELECT token, period_from, period_to, sent_at FROM reports WHERE student_id = ? AND status = 'sent' ORDER BY sent_at DESC LIMIT 12").all(fam.id),
       invoices: db.prepare("SELECT token, period, amount_cents, status FROM invoices WHERE student_id = ? AND status <> 'void' ORDER BY period DESC LIMIT 6")
         .all(fam.id).map((i) => ({ ...i, period_label: periodLabel(i.period) })),
       cancelled: rows.filter((s) => s.end_at > now && s.status === 'cancelled').map(publicSession),

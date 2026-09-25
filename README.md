@@ -55,6 +55,12 @@ Restart, then in Settings choose:
 
 Emails come from your own Gmail address, so parents recognize them. Everything is queued and retried, so a mail hiccup never breaks a booking.
 
+## Waitlist, invoices & progress reports
+
+- **Waitlist.** When you're full, families join from the booking page, picking the days that work. Whenever a time opens up (a cancellation, a moved session, new availability), everyone waiting whose days match gets an email, once per opening, and the first to request it gets it. Anyone who books is automatically taken off the waitlist.
+- **Invoices.** Go to *Admin → Invoices*, pick a month, and click **Create & email**. Each family gets an itemized bill for the sessions that were done (or billed as late cancels/no-shows) and not yet paid. It comes with a private invoice page and your Venmo/Zelle details (*Settings → Payments*; no fees, unlike card processors at ~3%). Marking an invoice paid marks its sessions paid. There's an optional automatic run on the 1st of each month.
+- **Progress reports.** On a student's page, pick a date range and click **Draft with AI** or **Write manually**. The AI (Claude, `claude-opus-5`) writes 120–220 words from *your* session notes only. It receives the student's first name, subject, grade and notes, never parent names, emails or phone numbers. You edit the draft, then **Send**: it's emailed and shown on the family page. A report costs a few cents. Set `ANTHROPIC_API_KEY` in `.env` to enable it; without a key you can still write reports by hand.
+
 ## Google Calendar sync (both directions)
 
 **Google Calendar → app (every 15 min).** In Google Calendar, go to *Settings → your calendar → Integrate calendar* and copy the **Secret address in iCal format**. Paste it in *Admin → Settings → Google Calendar sync*.

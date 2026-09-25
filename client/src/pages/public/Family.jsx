@@ -73,6 +73,20 @@ export default function Family() {
         <ErrorText error={act.error} />
       </section>
 
+      {data.reports.length > 0 && (
+        <section className="card">
+          <h2>Progress reports</h2>
+          <ul className="list">
+            {data.reports.map((r) => (
+              <li key={r.token} className="list-row">
+                <span>{r.period_from} → {r.period_to}</span>
+                <Link className="btn subtle" to={`/report/${r.token}`}>Read</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {data.invoices.length > 0 && (
         <section className="card">
           <h2>Invoices</h2>

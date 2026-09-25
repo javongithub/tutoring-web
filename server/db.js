@@ -175,6 +175,21 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_invoice_per_month ON invoices(student_id, period) WHERE status <> 'void';
 
+-- Parent-facing progress reports. Drafted (optionally by AI) from session notes,
+-- always reviewed and edited by the tutor before sending.
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  period_from TEXT NOT NULL,
+  period_to TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','sent')),
+  source TEXT NOT NULL DEFAULT 'manual',    -- 'ai' or 'manual'
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  sent_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
