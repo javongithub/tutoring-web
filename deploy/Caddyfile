@@ -1,0 +1,6 @@
+# Caddy gets and renews HTTPS certificates automatically.
+# Point your domain's A record at the VM's external IP, replace the domain, then:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+tutoring.example.com {
+	reverse_proxy localhost:3001
+}

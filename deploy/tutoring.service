@@ -1,0 +1,16 @@
+# systemd unit for a Linux VM (Google Cloud e2-micro / Oracle Always Free).
+# Install: sudo cp deploy/tutoring.service /etc/systemd/system/ && sudo systemctl enable --now tutoring
+[Unit]
+Description=Tutoring web app
+After=network-online.target
+
+[Service]
+User=tutor
+WorkingDirectory=/home/tutor/tutoring-web
+EnvironmentFile=/home/tutor/tutoring-web/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

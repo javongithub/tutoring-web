@@ -1,0 +1,22 @@
+{
+  "_comment": "Example data. Copy to data/seed.local.json (gitignored) and fill in real clients. weekday: 0=Sun … 6=Sat.",
+  "settings": { "tutor_name": "Math Tutoring", "default_rate_cents": 3000 },
+  "availability": [
+    { "weekday": 1, "start_time": "15:30", "end_time": "20:30" },
+    { "weekday": 2, "start_time": "15:30", "end_time": "20:30" },
+    { "weekday": 3, "start_time": "15:30", "end_time": "20:30" },
+    { "weekday": 4, "start_time": "15:30", "end_time": "20:30" },
+    { "weekday": 5, "start_time": "15:30", "end_time": "19:00" }
+  ],
+  "blocks": [
+    { "label": "Class", "weekday": 2, "start_time": "15:30", "end_time": "16:50" },
+    { "label": "Class", "weekday": 4, "start_time": "15:30", "end_time": "16:50" },
+    { "label": "Club", "weekday": 3, "start_time": "18:30", "end_time": "21:00" }
+  ],
+  "students": [
+    { "name": "Alex", "parent_name": "Ms. Example", "subject": "Pre-calc",
+      "schedule": [{ "weekday": 1, "start_time": "15:30" }, { "weekday": 3, "start_time": "15:30" }] },
+    { "name": "Jordan", "parent_name": "Mr. Example", "subject": "Algebra 1",
+      "schedule": [{ "weekday": 2, "start_time": "17:30" }] }
+  ]
+}
