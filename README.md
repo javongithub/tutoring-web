@@ -87,7 +87,7 @@ This is one Node process with a SQLite file and background sync jobs, so it need
 
 ### Google Cloud e2-micro: one command
 
-1. Go to https://console.cloud.google.com and sign in. Create a project and **link billing**: Google requires a card even for the free tier (you won't be charged for the e2-micro itself).
+1. Go to https://console.cloud.google.com and sign in. Create a project and **link billing**: Google requires a card to verify you're a real person, even for the free tier. You aren't charged while you stay in the free limits below.
 2. Open **Cloud Shell** (the `>_` icon, top right) and paste:
    ```bash
    BRANCH=main bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/refs/heads/main/deploy/gcp-create.sh)
@@ -106,7 +106,7 @@ This is one Node process with a SQLite file and background sync jobs, so it need
 
 Notes:
 - **Don't "Stop" the VM** (reboots are fine). Stopping can change its IP address, and with it the sslip.io address. For a permanent address, point your own domain (or a free DuckDNS name) at the VM and re-run with `DOMAIN=yourname.duckdns.org`.
-- Google charges for some external IPv4 addresses. Check *Billing* after a couple of days and set a $1 budget alert so nothing surprises you.
+- Cost is $0 as long as you stay inside Google's Always Free limits, which the script is set up for: **one** e2-micro in us-west1/us-central1/us-east1, ≤30 GB standard disk, ≤1 GB/month outbound traffic from North America. The external IP of a free-tier VM is also free. What *would* cost money: a second VM, a bigger machine type, another region, an SSD disk, or disk snapshots. Set a $1 budget alert (*Billing → Budgets & alerts*) as a safety net.
 - Backups: nightly snapshot to `data/backups/` (14 days kept). Download one now and then (SSH window → ⚙ → Download file).
 - Logs: `sudo journalctl -u tutoring -f`. Edit secrets: `sudo nano /home/tutor/tutoring-web/.env`, then `sudo systemctl restart tutoring`.
 
