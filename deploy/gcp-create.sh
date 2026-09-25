@@ -2,7 +2,7 @@
 # Create the free-tier VM and install the app. Run this in Google Cloud Shell
 # (https://shell.cloud.google.com), which is already signed in to your Google account:
 #
-#   BRANCH=main bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/main/deploy/gcp-create.sh)
+#   BRANCH=main bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/refs/heads/main/deploy/gcp-create.sh)
 #
 # Safe to re-run: existing firewall rule / VM are reused and the app is updated.
 set -euo pipefail
@@ -38,7 +38,7 @@ fi
 
 for i in 1 2 3 4 5 6; do
   if gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --quiet --command \
-    "curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/$BRANCH/deploy/setup-vm.sh | sudo BRANCH='$BRANCH' REPO='$REPO' DOMAIN='${DOMAIN:-}' bash"; then
+    "curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/refs/heads/$BRANCH/deploy/setup-vm.sh | sudo BRANCH='$BRANCH' REPO='$REPO' DOMAIN='${DOMAIN:-}' bash"; then
     exit 0
   fi
   echo "SSH not ready yet, retrying in 15s ($i/6)…"; sleep 15

@@ -90,7 +90,7 @@ This is one Node process with a SQLite file and background sync jobs, so it need
 1. Go to https://console.cloud.google.com and sign in. Create a project and **link billing**: Google requires a card even for the free tier (you won't be charged for the e2-micro itself).
 2. Open **Cloud Shell** (the `>_` icon, top right) and paste:
    ```bash
-   BRANCH=main bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/main/deploy/gcp-create.sh)
+   BRANCH=main bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/refs/heads/main/deploy/gcp-create.sh)
    ```
    This creates a free e2-micro VM in `us-west1` with a 30 GB standard disk and firewall rules for HTTPS. It then installs Node, the app and Caddy, generates a strong admin password, and starts everything. It prints:
    - your site address: `https://<your-ip>.sslip.io`, with HTTPS and no domain purchase needed
