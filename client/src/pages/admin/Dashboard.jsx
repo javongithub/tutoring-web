@@ -62,8 +62,9 @@ export default function Dashboard() {
                 <strong>{c.student_name}</strong>
                 <div>
                   {c.kind === 'cancel'
-                    ? <>{fmtWhen(c.start_at, c.end_at)}{c.late ? <span className="tag late">late</span> : null}</>
+                    ? <>{fmtWhen(c.start_at, c.end_at)}</>
                     : <>{fmtWhen(c.start_at, c.end_at)} → <strong>{fmtWhen(c.new_start_at, c.new_end_at)}</strong></>}
+                  {c.late ? <span className="tag late" title="Asked inside the 24-hour window; family ticked that they understand the policy">late · policy acknowledged</span> : null}
                 </div>
                 {c.reason && <div className="muted small">“{c.reason}”</div>}
               </div>

@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { getSettings, newToken, DEFAULT_SETTINGS, tx } from '../db.js';
 import {
-  addDays, addMinutes, isDate, isDateTime, isTime, minutesBetween, nowLocal, today, weekStart, toMs,
+  addDays, addMinutes, fmtWhen, isDate, isDateTime, isTime, minutesBetween, nowLocal, today, weekStart, toMs,
 } from '../lib/time.js';
 import {
   cancelSession, clearFutureInstances, materializeRecurring, moveSession, occupied, syncCalendar, validRange,
 } from '../lib/schedule.js';
 import { parseTutoringTitle } from '../lib/ics.js';
 import { bad, bool, int, notFound, str } from '../lib/http.js';
+import { flushOutbox, sessionContext, when } from '../lib/notify.js';
 
 const SESSION_SELECT = `
   SELECT s.*, st.name AS student_name, st.parent_name, st.next_plan AS student_next_plan
@@ -20,7 +21,7 @@ const CHANGE_SELECT = `
 // A session earns money if it happened, or if it was a billed late cancel / no-show.
 const BILLABLE = "(s.status = 'completed' OR s.charged = 1)";
 
-export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} } = {}) {
+export default function adminRoutes(db, { gcalEmail = null, onChange = () => {}, notify } = {}) {
   const r = Router();
   const one = (sql, ...a) => db.prepare(sql).get(...a);
   const all = (sql, ...a) => db.prepare(sql).all(...a);
@@ -36,6 +37,12 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
   };
 
   r.use((_req, _res, next) => { materializeRecurring(db); next(); });
+  const origin = (req) => `${req.protocol}://${req.get('host')}`;
+  const familyPath = (c) => (c.portal_token ? `/family/${c.portal_token}` : `/booking/${c.token}`);
+  const tellFamily = (req, sessionId, subject, body) => {
+    const c = sessionContext(db, sessionId);
+    notify.family(c.family_email, subject(c), body(c), { path: familyPath(c), reqOrigin: origin(req) });
+  };
 
   // ---------- Dashboard ----------
   r.get('/dashboard', (_req, res) => {
@@ -128,6 +135,10 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
     ).run(next.start_at, next.end_at, next.topics, next.notes, next.next_plan, next.paid, next.charged,
       next.rate_cents, next.cancel_reason, s.id);
     if (b.next_plan !== undefined && s.student_id) syncStudentPlan(s.student_id);
+    if (next.start_at !== s.start_at && s.status === 'confirmed' && bool(b.notify ?? 1)) {
+      tellFamily(req, s.id, (c) => `Moved: ${c.who}'s session is now ${when(c)}`,
+        (c) => `Heads up — ${c.who}'s session on ${fmtWhen(s.start_at, s.end_at)} moved to ${when(c)}.\n\nYour family page:`);
+    }
     res.json(getSession(s.id));
   });
 
@@ -170,6 +181,10 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
       reason: str(req.body.reason, 1000),
       charged: req.body.charged !== undefined ? bool(req.body.charged) : undefined,
     });
+    if (req.body.by === 'tutor' && bool(req.body.notify ?? 1)) {
+      tellFamily(req, s.id, (c) => `Cancelled: ${c.who}, ${when(c)}`,
+        (c) => `Sorry — I need to cancel ${c.who}'s session on ${when(c)}.${req.body.reason ? `\n“${str(req.body.reason, 1000)}”` : ''}\n\nYour family page has the updated schedule:`);
+    }
     res.json(getSession(s.id));
   });
 
@@ -207,6 +222,8 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
       }
       return getSession(s.id);
     });
+    tellFamily(req, s.id, (c) => `Confirmed: ${c.who}, ${when(c)}`,
+      (c) => `You're all set — ${c.who}'s session on ${when(c)} is confirmed.${bool(req.body.repeat_weekly) ? ' It will repeat every week at this time.' : ''}\n\nYour family page shows upcoming sessions and lets you ask to move or cancel:`);
     res.json(result);
   });
 
@@ -215,6 +232,10 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
     if (s.status !== 'pending') throw bad('Only pending requests can be declined');
     db.prepare("UPDATE sessions SET status='declined', cancel_reason=?, cancelled_at=? WHERE id=?")
       .run(str(req.body.reason, 1000), nowLocal(), s.id);
+    const reason = str(req.body.reason, 1000);
+    const c = sessionContext(db, s.id);
+    notify.family(c.family_email, `Couldn't confirm ${when(c)}`,
+      `Sorry — I can't do ${when(c)}.${reason ? `\n“${reason}”` : ''}\n\nPlease pick another time:`, { path: '/', reqOrigin: origin(req) });
     res.json(getSession(s.id));
   });
 
@@ -276,6 +297,12 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
       db.prepare("UPDATE change_requests SET status='approved', decided_at=?, tutor_note=? WHERE id=?")
         .run(nowLocal(), str(req.body.note, 1000), c.id);
     });
+    const note = str(req.body.note, 1000);
+    tellFamily(req, s.id,
+      (x) => (c.kind === 'cancel' ? `Cancellation approved: ${x.who}, ${fmtWhen(c.start_at, c.end_at)}` : `Move approved: ${x.who} is now ${when(x)}`),
+      (x) => (c.kind === 'cancel'
+        ? `Got it — ${x.who}'s session on ${fmtWhen(c.start_at, c.end_at)} is cancelled.`
+        : `Done — ${x.who}'s session moved from ${fmtWhen(c.start_at, c.end_at)} to ${when(x)}.`) + (note ? `\n“${note}”` : '') + '\n\nYour family page:');
     res.json(one(`${CHANGE_SELECT} WHERE c.id = ?`, c.id));
   });
 
@@ -283,6 +310,9 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
     const c = getChange(int(req.params.id));
     db.prepare("UPDATE change_requests SET status='declined', decided_at=?, tutor_note=? WHERE id=?")
       .run(nowLocal(), str(req.body.note, 1000), c.id);
+    const note = str(req.body.note, 1000);
+    tellFamily(req, c.session_id, (x) => `Request not approved: ${x.who}, ${when(x)}`,
+      (x) => `Sorry — I couldn't ${c.kind === 'cancel' ? 'cancel' : 'move'} ${x.who}'s session. It stays on ${when(x)}.${note ? `\n“${note}”` : ''}\n\nYour family page:`);
     res.json(one(`${CHANGE_SELECT} WHERE c.id = ?`, c.id));
   });
 
@@ -495,6 +525,8 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
   // ---------- Settings, availability, blocked times ----------
   r.get('/settings', (_req, res) => {
     res.json({
+      email_enabled: notify.emailEnabled,
+      outbox: all('SELECT id, channel, to_addr, subject, created_at, sent_at, attempts, last_error FROM outbox ORDER BY id DESC LIMIT 15'),
       settings: getSettings(db),
       gcal_service_account: gcalEmail,
       availability: all('SELECT * FROM availability ORDER BY weekday, start_time'),
@@ -505,7 +537,8 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
   r.put('/settings', (req, res) => {
     const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     const editable = ['tutor_name', 'default_rate_cents', 'slot_minutes', 'min_notice_hours', 'booking_weeks_ahead',
-      'cancel_notice_hours', 'charge_late_cancels', 'ics_url', 'gcal_calendar_id'];
+      'cancel_notice_hours', 'charge_late_cancels', 'ics_url', 'gcal_calendar_id',
+    'notify_email', 'ntfy_url', 'email_families', 'reminders', 'reminder_hour', 'public_url'];
     tx(db, () => {
       for (const k of editable) {
         if (req.body[k] === undefined) continue;
@@ -517,6 +550,10 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
         if (k === 'ics_url' && v && !/^https:\/\/\S+$/.test(v.replace(/^webcal:/, 'https:'))) throw bad('Calendar URL must start with https://');
         if (k === 'ics_url') v = v.replace(/^webcal:/, 'https:');
         if (k === 'slot_minutes' && (v < 15 || v > 240)) throw bad('Session length must be 15–240 minutes');
+        if (k === 'ntfy_url' && v && !/^https:\/\/[^/\s]+\/[\w-]{6,}$/.test(v)) throw bad('Phone alerts URL looks like https://ntfy.sh/your-secret-topic (topic: 6+ letters, digits, - or _)');
+        if (k === 'notify_email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw bad('Enter a valid email');
+        if (k === 'public_url' && v && !/^https?:\/\/\S+$/.test(v)) throw bad('Public URL must start with https://');
+        if (k === 'reminder_hour' && v > 23) throw bad('Reminder hour must be 0–23');
         up.run(k, String(v));
       }
     });
@@ -544,6 +581,13 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {} 
   r.put('/blocks', (req, res) => { replaceWeekly('blocks', req.body, true); res.json(all('SELECT * FROM blocks ORDER BY weekday, start_time')); });
 
   // ---------- Google Calendar ----------
+  r.post('/notify/test', async (req, res) => {
+    notify.tutor('Test notification', 'If you can read this, tutoring alerts are working. 🎉', { reqOrigin: origin(req) });
+    const result = await flushOutbox(db);
+    const last = all('SELECT channel, sent_at, last_error FROM outbox ORDER BY id DESC LIMIT 2');
+    res.json({ ...result, last });
+  });
+
   r.post('/calendar/rotate-feed', (_req, res) => {
     db.prepare("UPDATE settings SET value = ? WHERE key = 'feed_token'").run(newToken());
     res.json(getSettings(db));

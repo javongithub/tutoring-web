@@ -1,16 +1,20 @@
 import { Router } from 'express';
 import { getSettings, newToken } from '../db.js';
-import { addDays, addMinutes, isDate, isDateTime, minutesBetween, nowLocal, today, weekStart } from '../lib/time.js';
+import { addDays, addMinutes, fmtWhen, isDate, isDateTime, minutesBetween, nowLocal, today, weekStart } from '../lib/time.js';
 import { cancelSession, isLateCancel, materializeRecurring, occupied, openSlots } from '../lib/schedule.js';
-import { bad, isEmail, notFound, rateLimit, str } from '../lib/http.js';
+import { bad, bool, isEmail, notFound, rateLimit, str } from '../lib/http.js';
 import { buildFeed } from '../lib/gcal.js';
+import { sessionContext, when } from '../lib/notify.js';
+
+const money = (c) => `$${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 
 // Everything here is reachable without logging in, so responses only ever include
 // the viewing family's own data. Other families show as "Other student", and the
 // tutor's classes/clubs/etc. show as "Busy".
-export default function publicRoutes(db) {
+export default function publicRoutes(db, notify) {
   const r = Router();
   const one = (sql, ...a) => db.prepare(sql).get(...a);
+  const origin = (req) => `${req.protocol}://${req.get('host')}`;
 
   const familyByToken = (token) => {
     const st = token ? one('SELECT id, name, parent_name, portal_token FROM students WHERE portal_token = ? AND active = 1', String(token)) : null;
@@ -26,11 +30,24 @@ export default function publicRoutes(db) {
       WHERE session_id = ? AND status IN ('approved','declined') ORDER BY decided_at DESC LIMIT 1`, sessionId,
   ) || null;
 
+  const insideNotice = (s) => isLateCancel(db, s.start_at) === 1;
+  // The text families must acknowledge before asking for a change inside the notice window.
+  const policyMsg = () => {
+    const st = getSettings(db);
+    const h = st.cancel_notice_hours;
+    return `Our policy requires at least ${h} hours' notice to cancel or reschedule. This session starts in less than ${h} hours, `
+      + `so this is a late request: your tutor may not be able to approve it`
+      + (st.charge_late_cancels ? `, and a late cancellation is charged the full session fee (${money(st.default_rate_cents)}).` : '.');
+  };
+
   const publicSession = (s) => ({
     token: s.token, start_at: s.start_at, end_at: s.end_at, status: s.status,
     student: s.student_name || s.requester_student, cancelled_by: s.cancelled_by, late_cancel: s.late_cancel,
     change_request: openChange(s.id), last_decision: lastDecision(s.id),
     can_request_change: s.status === 'confirmed' && s.start_at > nowLocal() && !openChange(s.id),
+    // Inside the notice window (default 24h): still allowed, but the family must acknowledge the policy.
+    late_window: s.status === 'confirmed' && s.start_at > nowLocal() && insideNotice(s),
+    policy: insideNotice(s) ? policyMsg() : null,
     can_withdraw: s.status === 'pending' && s.start_at > nowLocal(),
   });
 
@@ -85,6 +102,14 @@ export default function publicRoutes(db) {
          requester_name, requester_student, requester_email, requester_phone, requester_message)
        VALUES (?, ?, ?, 'pending', 'booking', ?, ?, ?, ?, ?, ?, ?)`,
     ).run(family?.id ?? null, start, addMinutes(start, len), rate, token, parent, student, email, phone, str(b.message, 2000));
+    const s = sessionContext(db, one('SELECT id FROM sessions WHERE token = ?', token).id);
+    const msg = str(b.message, 2000);
+    notify.tutor(`New booking request: ${s.who}`,
+      `${family ? `${s.who} (existing student)` : `${s.who} — parent ${parent}${email ? `, ${email}` : ''}${phone ? `, ${phone}` : ''}`}\n${when(s)}${msg ? `\n“${msg}”` : ''}`,
+      { reqOrigin: origin(req) });
+    notify.family(s.family_email, `Request received: ${s.who}, ${when(s)}`,
+      `Thanks! Your request for ${when(s)} was received. You'll get another email once it's confirmed.\n\nCheck on it any time:`,
+      { path: `/booking/${token}`, reqOrigin: origin(req) });
     res.status(201).json({ token });
   });
 
@@ -110,6 +135,7 @@ export default function publicRoutes(db) {
     const s = byToken(req.params.token);
     if (s.status !== 'pending') throw bad('Only unconfirmed requests can be withdrawn. Ask to cancel instead.');
     cancelSession(db, s, { by: 'client', reason: str(req.body?.reason, 1000) || 'Request withdrawn', late: 0 });
+    notify.tutor(`Request withdrawn: ${s.student_name || s.requester_student}`, `They withdrew their request for ${when(s)}.`, { reqOrigin: origin(req) });
     res.json(publicSession(byToken(s.token)));
   });
 
@@ -117,6 +143,10 @@ export default function publicRoutes(db) {
   r.post('/booking/:token/change', limiter, (req, res) => {
     const s = byToken(req.params.token);
     if (s.status !== 'confirmed' || s.start_at <= nowLocal()) throw bad('This session can no longer be changed online');
+    const late = insideNotice(s) ? 1 : 0;
+    if (late && !bool(req.body?.acknowledge_policy)) {
+      throw Object.assign(bad(`${policyMsg()} Please confirm you understand.`), { status: 409 });
+    }
     if (openChange(s.id)) throw bad('You already have a request waiting on this session');
     const kind = req.body?.kind === 'reschedule' ? 'reschedule' : 'cancel';
     const reason = str(req.body?.reason, 1000);
@@ -132,9 +162,17 @@ export default function publicRoutes(db) {
       if (!lenOk || clash) throw bad('That time isn’t open. Please pick one of the open slots.');
     }
     db.prepare(
-      `INSERT INTO change_requests (session_id, kind, new_start_at, new_end_at, reason, late, requested_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(s.id, kind, newStart, newEnd, reason, kind === 'cancel' ? isLateCancel(db, s.start_at) : 0, nowLocal());
+      `INSERT INTO change_requests (session_id, kind, new_start_at, new_end_at, reason, late, policy_ack, requested_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(s.id, kind, newStart, newEnd, reason, late, late, nowLocal());
+    const lateTag = late ? ` (LATE, <${getSettings(db).cancel_notice_hours}h, policy acknowledged)` : '';
+    notify.tutor(
+      kind === 'cancel' ? `Cancel request${lateTag}: ${s.student_name}` : `Move request${lateTag}: ${s.student_name}`,
+      kind === 'cancel'
+        ? `${s.student_name}'s family asks to cancel ${when(s)}.${reason ? `\n“${reason}”` : ''}`
+        : `${s.student_name}'s family asks to move ${when(s)}\n→ ${fmtWhen(newStart, newEnd)}${reason ? `\n“${reason}”` : ''}`,
+      { reqOrigin: origin(req) },
+    );
     res.status(201).json(publicSession(byToken(s.token)));
   });
 
@@ -143,6 +181,7 @@ export default function publicRoutes(db) {
     const info = db.prepare("UPDATE change_requests SET status='withdrawn', decided_at=? WHERE session_id=? AND status='pending'")
       .run(nowLocal(), s.id);
     if (!info.changes) throw bad('No open request to withdraw');
+    notify.tutor(`Change request withdrawn: ${s.student_name}`, `Never mind: ${s.student_name}'s family withdrew their request about ${when(s)}.`, { reqOrigin: origin(req) });
     res.json(publicSession(byToken(s.token)));
   });
 

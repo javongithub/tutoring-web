@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   -- For weekly-schedule sessions: the originally scheduled start. Stays fixed when a
   -- single week is moved, so the schedule never regenerates the old slot.
   slot_key TEXT,
+  reminded INTEGER NOT NULL DEFAULT 0,
   gcal_event_id TEXT,
   gcal_dirty INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS change_requests (
   new_end_at TEXT,
   reason TEXT NOT NULL DEFAULT '',
   late INTEGER NOT NULL DEFAULT 0,             -- asked inside the cancellation notice window
+  policy_ack INTEGER NOT NULL DEFAULT 0,       -- family ticked "I understand the 24-hour policy"
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined','withdrawn')),
   tutor_note TEXT NOT NULL DEFAULT '',
   requested_at TEXT NOT NULL,
@@ -123,6 +125,21 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 );
 CREATE INDEX IF NOT EXISTS calendar_events_start ON calendar_events(start_at);
 
+-- Notifications waiting to go out (email or phone push). A worker drains it and retries.
+CREATE TABLE IF NOT EXISTS outbox (
+  id INTEGER PRIMARY KEY,
+  channel TEXT NOT NULL CHECK (channel IN ('email','push')),
+  to_addr TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  link TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  sent_at TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS outbox_unsent ON outbox(sent_at, attempts);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -142,15 +159,36 @@ export const DEFAULT_SETTINGS = {
   ics_error: '',
   gcal_calendar_id: '',
   gcal_error: '',
+  notify_email: '',          // where YOU get emailed about requests
+  ntfy_url: '',              // e.g. https://ntfy.sh/tutoring-x7k2… for phone push
+  email_families: 1,         // email parents about confirmations, decisions, changes
+  reminders: 0,              // email parents the evening before each session
+  reminder_hour: 18,
+  public_url: '',
   gcal_synced_at: '',
   feed_token: '',
 };
+
+// Columns added after the first release. CREATE TABLE IF NOT EXISTS won't add them to an
+// existing database, so add any that are missing. Append here; never edit old entries.
+const MIGRATIONS = [
+  ['sessions', 'reminded', 'INTEGER NOT NULL DEFAULT 0'],
+  ['change_requests', 'policy_ack', 'INTEGER NOT NULL DEFAULT 0'],
+];
+
+function migrate(db) {
+  for (const [table, column, ddl] of MIGRATIONS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
 
 export function openDb(file = process.env.DB_PATH || 'data/tutoring.db') {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  migrate(db);
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) ins.run(k, String(v));
   db.prepare("UPDATE settings SET value = ? WHERE key = 'feed_token' AND value = ''").run(newToken());

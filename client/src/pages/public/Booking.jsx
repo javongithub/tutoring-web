@@ -30,6 +30,7 @@ export default function Booking() {
         )}
         {s.status === 'declined' && <p>Sorry, this time couldn&rsquo;t be confirmed. <Link to="/">Pick another time</Link>.</p>}
         <ChangeStatus s={s} />
+        {s.can_request_change && <p className="hint">Changes must be requested at least 24 hours before the session.</p>}
         {s.family_token && (
           <p className="notice ok">
             You&rsquo;re booked. Your family page shows every upcoming session and lets you ask for changes:{' '}

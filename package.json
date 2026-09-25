@@ -13,11 +13,13 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
+    "backup": "node --disable-warning=ExperimentalWarning server/backup.js",
     "seed": "node --disable-warning=ExperimentalWarning server/seed.js",
     "test": "node --disable-warning=ExperimentalWarning --test \"server/test/*.test.js\""
   },
   "dependencies": {
     "express": "^5.2.1",
+    "nodemailer": "^10.0.10",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"

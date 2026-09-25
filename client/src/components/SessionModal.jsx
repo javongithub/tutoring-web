@@ -122,14 +122,16 @@ function CancelForm({ s, onSave, onBack, busy }) {
   const [by, setBy] = useState('client');
   const [reason, setReason] = useState('');
   const [charged, setCharged] = useState(false);
+  const [notify, setNotify] = useState(true);
   return (
-    <form className="form" onSubmit={(e) => { e.preventDefault(); onSave({ by, reason, charged: by === 'client' ? charged : false }); }}>
+    <form className="form" onSubmit={(e) => { e.preventDefault(); onSave({ by, reason, charged: by === 'client' ? charged : false, notify: by === 'tutor' && notify }); }}>
       <div className="segmented">
         <button type="button" className={by === 'client' ? 'on' : ''} onClick={() => setBy('client')}>Family cancelled</button>
         <button type="button" className={by === 'tutor' ? 'on' : ''} onClick={() => setBy('tutor')}>I cancelled</button>
       </div>
       <label className="field"><span>Reason</span><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. sick, family trip" /></label>
       {by === 'client' && <label className="check"><input type="checkbox" checked={charged} onChange={(e) => setCharged(e.target.checked)} /> Still charge for it ({money(s.rate_cents)})</label>}
+      {by === 'tutor' && <label className="check"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> Email the family (if they have an email on file)</label>}
       {s.recurring_id && <p className="hint">Only this week is cancelled. The weekly schedule continues.</p>}
       <div className="actions">
         <button type="button" className="btn" onClick={onBack}>Back</button>
@@ -142,12 +144,14 @@ function CancelForm({ s, onSave, onBack, busy }) {
 function MoveForm({ s, onSave, onBack, busy }) {
   const [start, setStart] = useState(s.start_at);
   const [dur, setDur] = useState(durationMin(s.start_at, s.end_at));
+  const [notify, setNotify] = useState(true);
   return (
-    <form className="form" onSubmit={(e) => { e.preventDefault(); onSave({ start_at: start, duration_min: Number(dur) }); }}>
+    <form className="form" onSubmit={(e) => { e.preventDefault(); onSave({ start_at: start, duration_min: Number(dur), notify }); }}>
       <div className="grid2">
         <label className="field"><span>New start</span><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required /></label>
         <label className="field"><span>Minutes</span><input type="number" min={15} max={480} step={15} value={dur} onChange={(e) => setDur(e.target.value)} /></label>
       </div>
+      <label className="check"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> Email the family about the new time</label>
       {s.recurring_id && <p className="hint">Moves only this week. Edit the weekly schedule on the student&rsquo;s page to change every week.</p>}
       <div className="actions">
         <button type="button" className="btn" onClick={onBack}>Back</button>

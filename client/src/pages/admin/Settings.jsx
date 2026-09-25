@@ -10,6 +10,7 @@ export default function Settings() {
   return (
     <div className="page">
       <h1>Settings</h1>
+      <Notifications data={data} onChanged={reload} />
       <GoogleCalendar data={data} onChanged={reload} />
       <General s={data.settings} onSaved={reload} />
       <WeeklyRows
@@ -51,9 +52,9 @@ function General({ s, onSaved }) {
           <label className="field"><span>Session length (minutes)</span><input type="number" min={15} step={15} value={f.slot_minutes} onChange={set('slot_minutes')} /></label>
           <label className="field"><span>Minimum notice to book (hours)</span><input type="number" min={0} value={f.min_notice_hours} onChange={set('min_notice_hours')} /></label>
           <label className="field"><span>How far ahead families can book (weeks)</span><input type="number" min={1} max={26} value={f.booking_weeks_ahead} onChange={set('booking_weeks_ahead')} /></label>
-          <label className="field"><span>Cancellation notice (hours)</span><input type="number" min={0} value={f.cancel_notice_hours} onChange={set('cancel_notice_hours')} /></label>
+          <label className="field"><span>Cancellation / reschedule policy (hours)</span><input type="number" min={0} value={f.cancel_notice_hours} onChange={set('cancel_notice_hours')} /></label>
         </div>
-        <label className="check"><input type="checkbox" checked={!!f.charge_late_cancels} onChange={set('charge_late_cancels')} /> Charge for late cancellations by default (you can override each time)</label>
+        <label className="check"><input type="checkbox" checked={!!f.charge_late_cancels} onChange={set('charge_late_cancels')} /> Charge for late cancellations (inside the policy window) by default. Families are told this before they request, and you can override it each time</label>
         <ErrorText error={error} />
         <button className="btn primary" disabled={busy}>Save</button>
       </form>
@@ -182,5 +183,81 @@ function ImportTutoring() {
       <ErrorText error={act.error} />
       <button className="btn primary" disabled={act.busy} onClick={doImport}>Import selected</button>
     </div>
+  );
+}
+
+const randomTopic = () => `tutoring-${Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14)}`;
+
+function Notifications({ data, onChanged }) {
+  const s = data.settings;
+  const [f, setF] = useState({
+    notify_email: s.notify_email, ntfy_url: s.ntfy_url, email_families: s.email_families,
+    reminders: s.reminders, reminder_hour: s.reminder_hour, public_url: s.public_url,
+  });
+  const [test, setTest] = useState(null);
+  const act = useAction();
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 1 : 0) : e.target.value });
+  const save = () => act.run(async () => { await put('/admin/settings', f); onChanged(); });
+  const sendTest = () => act.run(async () => {
+    await put('/admin/settings', f);
+    setTest(await post('/admin/notify/test'));
+    onChanged();
+  });
+  const failed = data.outbox.filter((m) => !m.sent_at && m.last_error);
+
+  return (
+    <section className="card">
+      <h2>Notifications</h2>
+
+      <h3>Phone alerts (free, instant)</h3>
+      <p className="hint">
+        1. Install the free <strong>ntfy</strong> app (<a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noreferrer">iPhone</a> /{' '}
+        <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noreferrer">Android</a>).
+        2. Click <em>Make my link</em>, then save. 3. In the app, tap <strong>+</strong> and subscribe to the topic after <code>ntfy.sh/</code>.
+        New bookings and cancel/move requests pop up on your lock screen. Tap one to open the dashboard.
+        Keep the topic secret, since anyone who knows it can read your alerts.
+      </p>
+      <div className="inline-form">
+        <input placeholder="https://ntfy.sh/your-secret-topic" value={f.ntfy_url} onChange={set('ntfy_url')} style={{ flex: 1 }} />
+        {!f.ntfy_url && <button className="btn" onClick={() => setF({ ...f, ntfy_url: `https://ntfy.sh/${randomTopic()}` })}>Make my link</button>}
+      </div>
+      {f.ntfy_url && <p className="small">Subscribe to topic: <code>{f.ntfy_url.replace(/^https:\/\/[^/]+\//, '')}</code></p>}
+
+      <h3>Email</h3>
+      {!data.email_enabled ? (
+        <p className="notice warn">Email is off. Set <code>SMTP_USER</code> / <code>SMTP_PASS</code> on the server (a Gmail app password works, see README), then restart. Phone alerts work without it.</p>
+      ) : (
+        <>
+          <label className="field"><span>Email me about requests at</span><input type="email" placeholder="you@gmail.com" value={f.notify_email} onChange={set('notify_email')} /></label>
+          <label className="check"><input type="checkbox" checked={!!f.email_families} onChange={set('email_families')} /> Email families when a request is received, confirmed or declined, and when a change is approved or declined</label>
+          <label className="check">
+            <input type="checkbox" checked={!!f.reminders} onChange={set('reminders')} /> Email families a reminder the evening before, at
+            <select value={f.reminder_hour} onChange={set('reminder_hour')} aria-label="Reminder time">
+              {[15, 16, 17, 18, 19, 20, 21].map((h) => <option key={h} value={h}>{fmtTime(`${h}:00`)}</option>)}
+            </select>
+          </label>
+        </>
+      )}
+      <label className="field"><span>Your site&rsquo;s public address (used for links in alerts and emails)</span>
+        <input placeholder={window.location.origin} value={f.public_url} onChange={set('public_url')} />
+      </label>
+
+      <ErrorText error={act.error} />
+      <div className="actions left">
+        <button className="btn primary" disabled={act.busy} onClick={save}>Save</button>
+        <button className="btn" disabled={act.busy || (!f.ntfy_url && !f.notify_email)} onClick={sendTest}>Save & send test alert</button>
+      </div>
+      {test && (
+        <p className={`notice ${test.last.every((m) => m.sent_at) ? 'ok' : 'warn'}`}>
+          {test.last.map((m) => `${m.channel === 'push' ? 'Phone' : 'Email'}: ${m.sent_at ? 'sent ✓' : `failed (${m.last_error})`}`).join(' · ')}
+        </p>
+      )}
+      {failed.length > 0 && (
+        <details>
+          <summary className="small error">{failed.length} notification(s) failing</summary>
+          <ul className="small">{failed.map((m) => <li key={m.id}>{m.subject} → {m.to_addr}: {m.last_error} (tries: {m.attempts})</li>)}</ul>
+        </details>
+      )}
+    </section>
   );
 }

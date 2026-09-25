@@ -30,7 +30,7 @@ export default function Book() {
           <ul className="facts">
             <li><strong>{money(info.rate_cents)}</strong> per {info.slot_minutes}-minute session</li>
             <li>Book at least {info.min_notice_hours}h ahead</li>
-            <li>Cancel or move with {info.cancel_notice_hours}h notice</li>
+            <li>{info.cancel_notice_hours}-hour cancellation &amp; reschedule policy</li>
           </ul>
         )}
       </header>

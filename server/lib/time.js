@@ -46,3 +46,16 @@ export const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test
 export const isTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 export const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+
+// Human-friendly "Fri, Oct 2, 5:30–6:30pm" for emails and notifications.
+const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function fmtClock(s) {
+  const [h, m] = s.slice(-5).split(':').map(Number);
+  return `${h % 12 || 12}${m ? `:${pad(m)}` : ''}${h < 12 ? 'am' : 'pm'}`;
+}
+export function fmtWhen(start, end) {
+  const d = new Date(toMs(start));
+  const date = `${DAY[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return end ? `${date}, ${fmtClock(start)}–${fmtClock(end)}` : `${date}, ${fmtClock(start)}`;
+}

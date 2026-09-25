@@ -234,3 +234,32 @@ test('Google Calendar push: create, update on move, delete on cancel; no echo on
   assert.match(feed.body, /BEGIN:VCALENDAR/);
   assert.equal((await call('GET', '/api/public/feed/wrong.ics', null, { auth: false })).status, 404);
 });
+
+test('24-hour policy: late requests allowed only after acknowledging, flagged late', async () => {
+  const soon = (await call('POST', '/api/admin/students', { name: 'Soon' })).body;
+  const inFive = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(new Date(Date.now() + 5 * 3600000)).replace(', ', 'T');
+  const s = (await call('POST', '/api/admin/sessions', { student_id: soon.id, start_at: inFive, duration_min: 60 })).body;
+  const view = (await call('GET', `/api/public/booking/${s.token}`, null, { auth: false })).body;
+  assert.equal(view.can_request_change, true);
+  assert.equal(view.late_window, true);
+  assert.match(view.policy, /24 hours' notice/);
+
+  const noAck = await call('POST', `/api/public/booking/${s.token}/change`, { kind: 'cancel' }, { auth: false });
+  assert.equal(noAck.status, 409, 'must acknowledge first');
+  assert.match(noAck.body.error, /confirm you understand/);
+
+  const ok = await call('POST', `/api/public/booking/${s.token}/change`, { kind: 'cancel', acknowledge_policy: true }, { auth: false });
+  assert.equal(ok.status, 201);
+  const c = (await call('GET', '/api/admin/dashboard')).body.changes.find((x) => x.session_id === s.id);
+  assert.equal(c.late, 1);
+  assert.equal(c.policy_ack, 1);
+  await call('POST', `/api/admin/changes/${c.id}/approve`, {});
+  const row = (await call('GET', '/api/admin/cancellations')).body.rows.find((x) => x.id === s.id);
+  assert.equal(row.late_cancel, 1, 'approved late request is recorded as a late cancel');
+
+  // Outside the window, no acknowledgement is needed.
+  const fam = (await call('GET', `/api/public/family/${alex.portal_token}`, null, { auth: false })).body;
+  const far = fam.upcoming.find((x) => x.can_request_change && !x.late_window);
+  assert.ok(far && far.policy === null);
+});

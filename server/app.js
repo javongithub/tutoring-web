@@ -5,8 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { authConfig, makeAuth } from './auth.js';
 import adminRoutes from './routes/admin.js';
 import publicRoutes from './routes/public.js';
+import { createNotifier } from './lib/notify.js';
 
-export function createApp(db, { auth = makeAuth(authConfig()), onChange = () => {}, gcalEmail = null } = {}) {
+export function createApp(db, {
+  auth = makeAuth(authConfig()), onChange = () => {}, gcalEmail = null, notify = createNotifier(db),
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY);
@@ -26,8 +29,8 @@ export function createApp(db, { auth = makeAuth(authConfig()), onChange = () => 
     if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) setImmediate(onChange); });
     next();
   });
-  app.use('/api/public', publicRoutes(db));
-  app.use('/api/admin', auth.requireAdmin, adminRoutes(db, { gcalEmail, onChange }));
+  app.use('/api/public', publicRoutes(db, notify));
+  app.use('/api/admin', auth.requireAdmin, adminRoutes(db, { gcalEmail, onChange, notify }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
   const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');

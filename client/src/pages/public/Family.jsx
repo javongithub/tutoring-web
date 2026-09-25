@@ -29,7 +29,7 @@ export default function Family() {
     <div className="public">
       <header className="hero">
         <h1>{data.student}&rsquo;s sessions</h1>
-        <p>Need to move or cancel? Send a request. Your tutor approves every change. Please give {data.cancel_notice_hours} hours&rsquo; notice.</p>
+        <p>Need to move or cancel? Please send a request at least <strong>{data.cancel_notice_hours} hours before</strong> the session. Your tutor approves every change. Requests within {data.cancel_notice_hours} hours count as late.</p>
       </header>
 
       <section className="card">
@@ -42,6 +42,7 @@ export default function Family() {
                 <strong>{fmtWhen(s.start_at, s.end_at)}</strong>{' '}
                 <StatusPill status={s.status}>{STATUS_LABEL[s.status]}</StatusPill>
                 <ChangeStatus s={s} />
+                {s.late_window && !s.change_request && <p className="small warn-text">Starts within 24 hours: late changes need your tutor&rsquo;s OK.</p>}
               </div>
               <div className="row-actions">
                 {s.can_request_change && <button className="btn" onClick={() => setChanging(s)}>Move / cancel</button>}
