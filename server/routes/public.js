@@ -76,6 +76,49 @@ export default function publicRoutes(db, notify) {
     });
   });
 
+  // ---------- Waitlist ----------
+  r.post('/waitlist', rateLimit({ max: 5, windowMs: 60 * 60 * 1000 }), (req, res) => {
+    const b = req.body || {};
+    if (str(b.website)) return res.status(201).json({ token: newToken() }); // honeypot
+    const parent = str(b.parent_name, 120);
+    const student = str(b.student_name, 120);
+    const email = str(b.email, 200).toLowerCase();
+    if (!parent || !student) throw bad('Please enter your name and the student’s name');
+    if (!isEmail(email)) throw bad('Please enter a valid email');
+    const days = (Array.isArray(b.weekdays) ? b.weekdays : []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+    const weekdays = [...new Set(days)].sort().join(',');
+    const existing = one("SELECT * FROM waitlist WHERE email = ? AND student_name = ? COLLATE NOCASE AND status = 'active'", email, student);
+    let token;
+    if (existing) {
+      db.prepare('UPDATE waitlist SET parent_name = ?, phone = ?, weekdays = ?, note = ? WHERE id = ?')
+        .run(parent, str(b.phone, 40), weekdays, str(b.note, 1000), existing.id);
+      token = existing.token;
+    } else {
+      token = newToken();
+      db.prepare('INSERT INTO waitlist (parent_name, student_name, email, phone, weekdays, note, token) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(parent, student, email, str(b.phone, 40), weekdays, str(b.note, 1000), token);
+      const n = one("SELECT COUNT(*) AS n FROM waitlist WHERE status = 'active'").n;
+      notify.tutor(`Waitlist: ${student} joined`, `${parent} (${email}) joined the waitlist for ${student}. ${n} waiting now.${str(b.note, 1000) ? `\n“${str(b.note, 1000)}”` : ''}`,
+        { path: '/admin/waitlist', reqOrigin: origin(req) });
+      notify.family(email, `You're on the waitlist for ${student}`,
+        `Thanks ${parent}! ${student} is on the waitlist. You'll get an email as soon as a time opens up.\n\nLeave the waitlist any time:`,
+        { path: `/waitlist/${token}`, reqOrigin: origin(req), force: true });
+    }
+    res.status(201).json({ token });
+  });
+
+  r.get('/waitlist/:token', (req, res) => {
+    const w = one('SELECT student_name, status, weekdays, created_at FROM waitlist WHERE token = ?', String(req.params.token));
+    if (!w) throw notFound('Waitlist entry not found');
+    res.json(w);
+  });
+
+  r.post('/waitlist/:token/leave', (req, res) => {
+    const info = db.prepare("UPDATE waitlist SET status = 'removed' WHERE token = ? AND status = 'active'").run(String(req.params.token));
+    if (!info.changes) throw bad('You’re not on the waitlist anymore');
+    res.json({ ok: true });
+  });
+
   r.post('/requests', rateLimit({ max: 8, windowMs: 60 * 60 * 1000 }), (req, res) => {
     const b = req.body || {};
     if (str(b.website)) return res.status(201).json({ token: newToken() }); // honeypot: silently drop bots
@@ -103,6 +146,9 @@ export default function publicRoutes(db, notify) {
        VALUES (?, ?, ?, 'pending', 'booking', ?, ?, ?, ?, ?, ?, ?)`,
     ).run(family?.id ?? null, start, addMinutes(start, len), rate, token, parent, student, email, phone, str(b.message, 2000));
     const s = sessionContext(db, one('SELECT id FROM sessions WHERE token = ?', token).id);
+    if (s.family_email) {
+      db.prepare("UPDATE waitlist SET status = 'booked' WHERE email = ? COLLATE NOCASE AND status = 'active'").run(s.family_email);
+    }
     const msg = str(b.message, 2000);
     notify.tutor(`New booking request: ${s.who}`,
       `${family ? `${s.who} (existing student)` : `${s.who} — parent ${parent}${email ? `, ${email}` : ''}${phone ? `, ${phone}` : ''}`}\n${when(s)}${msg ? `\n“${msg}”` : ''}`,

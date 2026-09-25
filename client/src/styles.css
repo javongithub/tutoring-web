@@ -173,3 +173,10 @@ button.ev { cursor: pointer; }
 .policy .check { margin-bottom: 0; font-weight: 600; }
 .warn-text { color: var(--warn); margin: .2rem 0 0; }
 input[type=checkbox] { width: 18px; height: 18px; padding: 0; margin: 0; flex-shrink: 0; accent-color: var(--accent); border-radius: 4px; }
+
+.days { border: 0; padding: 0; margin: 0 0 .75rem; display: flex; flex-wrap: wrap; gap: .4rem; }
+.days legend { font-size: .85rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; padding: 0; }
+.day-chip { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--line); border-radius: 99px; padding: .3rem .75rem; cursor: pointer; font-size: .9rem; }
+.day-chip input { display: none; }
+.day-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+details.card > summary { cursor: pointer; font-weight: 600; }

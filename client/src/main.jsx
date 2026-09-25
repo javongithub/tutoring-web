@@ -13,6 +13,8 @@ import Student from './pages/admin/Student.jsx';
 import Log from './pages/admin/Log.jsx';
 import Cancellations from './pages/admin/Cancellations.jsx';
 import Settings from './pages/admin/Settings.jsx';
+import Waitlist from './pages/admin/Waitlist.jsx';
+import WaitlistEntry from './pages/public/WaitlistEntry.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -21,6 +23,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<Book />} />
         <Route path="/booking/:token" element={<Booking />} />
         <Route path="/family/:token" element={<Family />} />
+        <Route path="/waitlist/:token" element={<WaitlistEntry />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="calendar" element={<Calendar />} />
@@ -28,6 +31,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="students/:id" element={<Student />} />
           <Route path="log" element={<Log />} />
           <Route path="cancellations" element={<Cancellations />} />
+          <Route path="waitlist" element={<Waitlist />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

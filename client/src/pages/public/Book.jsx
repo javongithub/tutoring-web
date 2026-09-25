@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { get, post } from '../../api.js';
-import { fmtWhen, money, useLoad } from '../../util.js';
+import { DAYS, fmtWhen, money, useLoad } from '../../util.js';
 import PublicWeek from '../../components/PublicWeek.jsx';
 import { ErrorText, useAction } from '../../components/ui.jsx';
 
@@ -11,6 +11,8 @@ export default function Book() {
   const [f, setF] = useState({ parent_name: '', student_name: '', email: '', phone: '', message: '', website: '' });
   const { busy, error, run } = useAction();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const week = /^\d{4}-\d{2}-\d{2}$/.test(params.get('week') || '') ? params.get('week') : null;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const submit = (e) => {
@@ -37,7 +39,7 @@ export default function Book() {
 
       <section className="card">
         <h2>1. Choose a time</h2>
-        <PublicWeek onSlot={setSlot} selected={slot?.start_at} />
+        <PublicWeek onSlot={setSlot} selected={slot?.start_at} initialStart={week} />
       </section>
 
       <section className="card" id="details">
@@ -58,7 +60,46 @@ export default function Book() {
           </form>
         )}
       </section>
+      <Waitlist />
       <footer className="public-foot"><a href="/admin">Tutor login</a></footer>
     </div>
+  );
+}
+
+function Waitlist() {
+  const [f, setF] = useState({ parent_name: '', student_name: '', email: '', phone: '', note: '', website: '' });
+  const [days, setDays] = useState([]);
+  const [done, setDone] = useState(false);
+  const { busy, error, run } = useAction();
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const toggle = (d) => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]);
+  if (done) {
+    return <section className="card"><h2>You&rsquo;re on the waitlist ✓</h2><p>We&rsquo;ll email you the moment a time opens up. Check your inbox for a confirmation.</p></section>;
+  }
+  return (
+    <section className="card" id="waitlist">
+      <h2>No time that works? Join the waitlist</h2>
+      <p className="hint">When a slot opens up (cancellations happen), you get an email right away. First to request it gets it.</p>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); run(async () => { await post('/public/waitlist', { ...f, weekdays: days }); setDone(true); }); }}>
+        <div className="grid2">
+          <label className="field"><span>Parent / guardian name</span><input required value={f.parent_name} onChange={set('parent_name')} autoComplete="name" /></label>
+          <label className="field"><span>Student name</span><input required value={f.student_name} onChange={set('student_name')} /></label>
+          <label className="field"><span>Email</span><input required type="email" value={f.email} onChange={set('email')} autoComplete="email" /></label>
+          <label className="field"><span>Phone (optional)</span><input type="tel" value={f.phone} onChange={set('phone')} autoComplete="tel" /></label>
+        </div>
+        <fieldset className="days">
+          <legend>Days that work (leave blank for any day)</legend>
+          {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+            <label key={d} className={`day-chip ${days.includes(d) ? 'on' : ''}`}>
+              <input type="checkbox" checked={days.includes(d)} onChange={() => toggle(d)} />{DAYS[d]}
+            </label>
+          ))}
+        </fieldset>
+        <label className="field"><span>Anything else? (optional)</span><input value={f.note} onChange={set('note')} placeholder="e.g. after 5pm only, AP Calc" /></label>
+        <label className="hp" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={f.website} onChange={set('website')} /></label>
+        <ErrorText error={error} />
+        <button className="btn primary" disabled={busy}>Join the waitlist</button>
+      </form>
+    </section>
   );
 }

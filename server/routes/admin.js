@@ -316,6 +316,19 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     res.json(one(`${CHANGE_SELECT} WHERE c.id = ?`, c.id));
   });
 
+  // ---------- Waitlist ----------
+  r.get('/waitlist', (_req, res) => {
+    res.json(all("SELECT * FROM waitlist ORDER BY status = 'active' DESC, created_at LIMIT 300"));
+  });
+
+  r.patch('/waitlist/:id', (req, res) => {
+    const status = str(req.body.status);
+    if (!['active', 'booked', 'removed'].includes(status)) throw bad('Invalid status');
+    const info = db.prepare('UPDATE waitlist SET status = ? WHERE id = ?').run(status, int(req.params.id));
+    if (!info.changes) throw notFound('Waitlist entry not found');
+    res.json(one('SELECT * FROM waitlist WHERE id = ?', int(req.params.id)));
+  });
+
   // ---------- Students ----------
   const studentFields = (b, prev = {}) => {
     const f = {

@@ -140,6 +140,27 @@ CREATE TABLE IF NOT EXISTS outbox (
 );
 CREATE INDEX IF NOT EXISTS outbox_unsent ON outbox(sent_at, attempts);
 
+-- Families waiting for a slot. They're emailed when times open up.
+CREATE TABLE IF NOT EXISTS waitlist (
+  id INTEGER PRIMARY KEY,
+  parent_name TEXT NOT NULL,
+  student_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  weekdays TEXT NOT NULL DEFAULT '',        -- "1,2,5" = Mon/Tue/Fri; '' = any day
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','booked','removed')),
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_notified_at TEXT
+);
+-- Open slots already announced to the waitlist. Rows are pruned when a slot stops being
+-- open, so a time that frees up again is announced again.
+CREATE TABLE IF NOT EXISTS waitlist_announced (
+  start_at TEXT PRIMARY KEY,
+  announced_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

@@ -38,9 +38,11 @@ export function createNotifier(db, { smtp = smtpConfig(), origin = () => process
     },
 
     // A family. Only if they gave an email and family emails are on.
-    family(email, subject, body, { path = '', reqOrigin } = {}) {
+    // `force` = the family explicitly asked for this email (e.g. waitlist), send even if
+    // routine family emails are turned off.
+    family(email, subject, body, { path = '', reqOrigin, force = false } = {}) {
       const st = getSettings(db);
-      if (!smtp || !st.email_families || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+      if (!smtp || (!st.email_families && !force) || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
       const link = path ? base(reqOrigin) + path : '';
       const sign = st.tutor_name ? `\n\n— ${st.tutor_name}` : '';
       ins.run('email', email, subject, `${body}${link ? `\n\n${link}` : ''}${sign}`, link);

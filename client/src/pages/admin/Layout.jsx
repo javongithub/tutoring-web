@@ -5,7 +5,7 @@ import { ErrorText, useAction } from '../../components/ui.jsx';
 
 const NAV = [
   ['/admin', 'Dashboard', true], ['/admin/calendar', 'Calendar'], ['/admin/students', 'Students'],
-  ['/admin/log', 'Tutoring log'], ['/admin/cancellations', 'Cancellations'], ['/admin/settings', 'Settings'],
+  ['/admin/log', 'Tutoring log'], ['/admin/cancellations', 'Cancellations'], ['/admin/waitlist', 'Waitlist'], ['/admin/settings', 'Settings'],
 ];
 
 export default function AdminLayout() {

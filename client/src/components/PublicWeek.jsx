@@ -6,8 +6,8 @@ import { ErrorText, Loading } from './ui.jsx';
 
 // The tutor's week as a family sees it: their own sessions by name, everyone else as
 // "Other student", everything else as "Busy", plus open slots to pick.
-export default function PublicWeek({ family, onSlot, selected, hideSlots }) {
-  const [start, setStart] = useState(null);
+export default function PublicWeek({ family, onSlot, selected, hideSlots, initialStart = null }) {
+  const [start, setStart] = useState(initialStart);
   const q = new URLSearchParams({ ...(start ? { start } : {}), ...(family ? { family } : {}) });
   const { data, error, loading } = useLoad(() => get(`/public/week?${q}`), [start, family]);
   if (error) return <ErrorText error={error} />;
