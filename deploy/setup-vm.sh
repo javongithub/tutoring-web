@@ -18,7 +18,8 @@ fi
 echo "==> Packages"
 apt-get update -qq
 apt-get install -y -qq curl git ca-certificates caddy >/dev/null
-if ! node -v 2>/dev/null | grep -qE '^v2[2-9]'; then
+# Needs Node 22.18+ (runs TypeScript directly via type stripping).
+if ! node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
   apt-get install -y -qq nodejs >/dev/null
 fi
@@ -85,7 +86,7 @@ systemctl enable -q caddy
 systemctl reload caddy || systemctl restart caddy
 
 echo "==> Nightly database backup (keeps 14 days in $APP_DIR/data/backups)"
-echo "15 3 * * * $APP_USER cd $APP_DIR && /usr/bin/node --disable-warning=ExperimentalWarning server/backup.js >/dev/null 2>&1" > /etc/cron.d/tutoring-backup
+echo "15 3 * * * $APP_USER cd $APP_DIR && /usr/bin/node --disable-warning=ExperimentalWarning server/backup.ts >/dev/null 2>&1" > /etc/cron.d/tutoring-backup
 
 sleep 3
 if curl -fsS localhost:3001/api/public/info >/dev/null; then STATUS="running ✓"; else STATUS="NOT responding — check: sudo journalctl -u tutoring -n 50"; fi

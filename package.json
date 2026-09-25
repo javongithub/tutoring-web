@@ -5,17 +5,19 @@
   "type": "module",
   "description": "Tutoring business manager: client booking with tutor approval, cancellations, session log, notes and earnings.",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "node --watch --disable-warning=ExperimentalWarning server/index.js",
+    "dev:api": "node --watch --disable-warning=ExperimentalWarning server/index.ts",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
-    "backup": "node --disable-warning=ExperimentalWarning server/backup.js",
-    "seed": "node --disable-warning=ExperimentalWarning server/seed.js",
-    "test": "node --disable-warning=ExperimentalWarning --test \"server/test/*.test.js\""
+    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.ts",
+    "backup": "node --disable-warning=ExperimentalWarning server/backup.ts",
+    "seed": "node --disable-warning=ExperimentalWarning server/seed.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test \"server/test/*.test.ts\"",
+    "typecheck": "tsc -p . && tsc -p client",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -26,8 +28,14 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
+    "typescript": "^7.0.2",
     "vite": "^8.3.1"
   }
 }

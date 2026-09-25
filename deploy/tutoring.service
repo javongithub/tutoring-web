@@ -8,7 +8,7 @@ After=network-online.target
 User=tutor
 WorkingDirectory=/home/tutor/tutoring-web
 EnvironmentFile=/home/tutor/tutoring-web/.env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.ts
 Restart=always
 RestartSec=3
 
