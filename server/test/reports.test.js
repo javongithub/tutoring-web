@@ -109,4 +109,6 @@ test('refusal, API errors and empty notes produce clear messages', async () => {
   const manual = await call('POST', `/api/admin/students/${empty.id}/reports`, {});
   assert.equal(manual.status, 201);
   assert.equal(manual.body.source, 'manual');
+  const again = await call('POST', `/api/admin/students/${empty.id}/reports`, {});
+  assert.equal(again.body.id, manual.body.id, 'blank draft reused, not duplicated');
 });

@@ -10,6 +10,9 @@ export function authConfig() {
   if (prod && (!password || !secret)) {
     throw new Error('ADMIN_PASSWORD and SESSION_SECRET must be set in production');
   }
+  if (prod && (password.length < 12 || secret.length < 32)) {
+    throw new Error('In production ADMIN_PASSWORD needs 12+ characters and SESSION_SECRET 32+ (openssl rand -hex 32)');
+  }
   if (!password) {
     password = 'changeme';
     console.warn('[auth] ADMIN_PASSWORD not set; using "changeme" (dev only)');
@@ -35,15 +38,18 @@ export function parseCookies(header = '') {
   return out;
 }
 
-export function makeAuth(cfg) {
+// getEpoch: a counter stored in the database. It's part of every cookie's signature, so
+// bumping it ("log out everywhere") invalidates all existing sessions, including stolen ones.
+export function makeAuth(cfg, { getEpoch = () => 0, audit = () => {} } = {}) {
   const attempts = new Map(); // ip -> { n, reset }
+  const payload = (exp) => `admin.${getEpoch()}.${exp}`;
 
   function isAuthed(req) {
     const v = parseCookies(req.headers.cookie)[COOKIE];
     if (!v) return false;
     const [exp, mac] = v.split('.');
     if (!exp || !mac || Number(exp) < Date.now() / 1000) return false;
-    return safeEq(mac, sign(cfg.secret, `admin.${exp}`));
+    return safeEq(mac, sign(cfg.secret, payload(exp)));
   }
 
   function login(req, res) {
@@ -51,15 +57,20 @@ export function makeAuth(cfg) {
     const now = Date.now();
     const a = attempts.get(ip) || { n: 0, reset: now + 15 * 60000 };
     if (now > a.reset) { a.n = 0; a.reset = now + 15 * 60000; }
-    if (a.n >= 10) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+    if (a.n >= 10) {
+      audit(req, 'login.blocked', 429);
+      return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+    }
     a.n++;
     attempts.set(ip, a);
     if (!safeEq(req.body?.password ?? '', cfg.password)) {
+      audit(req, 'login.failed', 401);
       return res.status(401).json({ error: 'Wrong password' });
     }
     attempts.delete(ip);
+    audit(req, 'login.ok', 200);
     const exp = Math.floor(now / 1000) + MAX_AGE_S;
-    res.setHeader('Set-Cookie', `${COOKIE}=${exp}.${sign(cfg.secret, `admin.${exp}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_S}${cfg.secure ? '; Secure' : ''}`);
+    res.setHeader('Set-Cookie', `${COOKIE}=${exp}.${sign(cfg.secret, payload(exp))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_S}${cfg.secure ? '; Secure' : ''}`);
     res.json({ ok: true });
   }
 
@@ -70,5 +81,5 @@ export function makeAuth(cfg) {
 
   const requireAdmin = (req, res, next) => (isAuthed(req) ? next() : res.status(401).json({ error: 'Not logged in' }));
 
-  return { isAuthed, login, logout, requireAdmin };
+  return { isAuthed, login, logout, requireAdmin, cfg };
 }

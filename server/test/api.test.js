@@ -263,3 +263,32 @@ test('24-hour policy: late requests allowed only after acknowledging, flagged la
   const far = fam.upcoming.find((x) => x.can_request_change && !x.late_window);
   assert.ok(far && far.policy === null);
 });
+
+test('security: headers, CSRF guard, audit log, log out everywhere', async () => {
+  const res = await fetch(`${base}/api/public/info`);
+  const csp = res.headers.get('content-security-policy');
+  assert.match(csp, /script-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+
+  // A cross-site HTML form can only send urlencoded/multipart/text bodies: rejected.
+  const forged = await fetch(`${base}/api/admin/logout-everywhere`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie }, body: 'x=1',
+  });
+  assert.equal(forged.status, 415);
+  const plain = await fetch(`${base}/api/public/requests`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' });
+  assert.equal(plain.status, 415);
+
+  await call('POST', '/api/auth/login', { password: 'wrong' }, { auth: false });
+  const audit = (await call('GET', '/api/admin/audit')).body;
+  assert.ok(audit.failed_logins_24h >= 2, 'failed logins counted');
+  assert.ok(audit.events.some((e) => e.action === 'login.ok'));
+  assert.ok(audit.events.some((e) => e.action.startsWith('POST /api/admin/')));
+
+  const r = await call('POST', '/api/admin/logout-everywhere');
+  assert.equal(r.status, 200);
+  assert.equal((await call('GET', '/api/admin/dashboard')).status, 401, 'old cookie is dead');
+  const again = await call('POST', '/api/auth/login', { password: 'pw' }, { auth: false });
+  cookie = again.headers.get('set-cookie').split(';')[0];
+  assert.equal((await call('GET', '/api/admin/dashboard')).status, 200, 'new login works');
+});

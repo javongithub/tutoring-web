@@ -5,7 +5,8 @@ export class ApiError extends Error {
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : {},
+    // The custom header is our CSRF guard: other sites can't send it without a CORS preflight.
+    headers: { 'x-requested-with': 'tutoring-web', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     credentials: 'same-origin',
   });

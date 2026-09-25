@@ -40,13 +40,16 @@ export default function WeekGrid({ start, items = [], slots = [], onSlot, today,
                 <span className="ev-time">{fmtTime(s.start_at)}</span> Open
               </button>
             ))}
-            {items.filter((it) => it.start_at.startsWith(d)).map((it, i) => {
+            {items.filter((it) => it.start_at.startsWith(d)).map((it, i, dayItems) => {
               const El = it.onClick ? 'button' : 'div';
+              // A clickable session overlapping a background (non-clickable) block is indented
+              // so the block behind it stays visible and the session stays clickable.
+              const overlapsBg = it.onClick && dayItems.some((o) => !o.onClick && o.start_at < it.end_at && it.start_at < o.end_at);
               return (
                 <El
                   key={`${it.start_at}-${i}`}
                   className={`ev ev-${it.kind}`}
-                  style={{ top: top(it.start_at), height: height(it.start_at, it.end_at) }}
+                  style={{ top: top(it.start_at), height: height(it.start_at, it.end_at), ...(overlapsBg ? { left: '14px' } : {}) }}
                   onClick={it.onClick}
                   title={`${it.title} · ${fmtRange(it.start_at, it.end_at)}`}
                 >

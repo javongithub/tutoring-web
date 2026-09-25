@@ -9,9 +9,16 @@ import { createNotifier } from './lib/notify.js';
 import { aiAvailable, createReporter } from './lib/reports.js';
 
 export function createApp(db, {
-  auth = makeAuth(authConfig()), onChange = () => {}, gcalEmail = null, notify = createNotifier(db),
+  auth = null, onChange = () => {}, gcalEmail = null, notify = createNotifier(db),
   reporter = createReporter(), aiEnabled = aiAvailable(),
 } = {}) {
+  const audit = (req, action, status) => {
+    db.prepare('INSERT INTO audit_log (ip, action, status) VALUES (?, ?, ?)').run(req.ip || '', action, status);
+  };
+  const getEpoch = () => Number(db.prepare("SELECT value FROM settings WHERE key = 'session_epoch'").get()?.value || 0);
+  // Tests pass a ready-made auth; wire the epoch + audit hooks either way.
+  auth = auth ? makeAuth(auth.cfg ?? auth, { getEpoch, audit }) : makeAuth(authConfig(), { getEpoch, audit });
+  const secure = process.env.NODE_ENV === 'production';
   const app = express();
   app.disable('x-powered-by');
   if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY);
@@ -20,6 +27,30 @@ export function createApp(db, {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer'); // family/booking links carry secrets in the URL
     res.setHeader('X-Frame-Options', 'DENY');
+    // Only our own scripts/styles may run; blocks injected scripts even if an XSS bug slipped in.
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'", "script-src 'self'", "style-src 'self'", "img-src 'self' data:",
+      "connect-src 'self'", "font-src 'self'", "object-src 'none'", "base-uri 'none'",
+      "form-action 'self'", "frame-ancestors 'none'",
+    ].join('; '));
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    if (secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
+
+  // CSRF defence: a write must be JSON or carry our custom header. Other websites can only
+  // send those with a CORS preflight, which this API never approves. (Also SameSite=Lax cookies.)
+  app.use('/api', (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    const json = (req.headers['content-type'] || '').startsWith('application/json');
+    if (json || req.headers['x-requested-with'] === 'tutoring-web') return next();
+    res.status(415).json({ error: 'Send requests as JSON' });
+  });
+
+  // Audit every admin change (after the response, so the status is known).
+  app.use('/api/admin', (req, res, next) => {
+    if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode !== 401) audit(req, `${req.method} ${req.originalUrl.split('?')[0]}`, res.statusCode); });
     next();
   });
 

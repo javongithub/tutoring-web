@@ -14,6 +14,7 @@ export default function Settings() {
       <Payments s={data.settings} onSaved={reload} />
       <GoogleCalendar data={data} onChanged={reload} />
       <General s={data.settings} onSaved={reload} />
+      <Security />
       <WeeklyRows
         title="When families can book"
         hint="Open slots on your public page come from these windows, minus anything already on your schedule or Google Calendar."
@@ -279,6 +280,36 @@ function Payments({ s, onSaved }) {
       <label className="check"><input type="checkbox" checked={!!f.auto_invoice} onChange={set('auto_invoice')} /> On the 1st of each month, automatically create and email last month&rsquo;s invoices</label>
       <ErrorText error={act.error} />
       <button className="btn primary" disabled={act.busy} onClick={() => act.run(async () => { await put('/admin/settings', f); onSaved(); })}>Save</button>
+    </section>
+  );
+}
+
+function Security() {
+  const { data } = useLoad(() => get('/admin/audit'));
+  const act = useAction();
+  if (!data) return null;
+  return (
+    <section className="card">
+      <h2>Security</h2>
+      <p className={`notice ${data.failed_logins_24h > 5 ? 'warn' : ''}`}>
+        {data.failed_logins_24h} failed login{data.failed_logins_24h === 1 ? '' : 's'} in the last 24 hours.
+        {data.failed_logins_24h > 5 && ' If that wasn’t you, change ADMIN_PASSWORD in .env and restart.'}
+      </p>
+      <p className="hint">Lost a phone or laptop you were logged in on? This signs out every device, including this one.</p>
+      <button className="btn danger" disabled={act.busy} onClick={() => window.confirm('Sign out everywhere?') && act.run(async () => { await post('/admin/logout-everywhere'); window.location.reload(); })}>
+        Log out everywhere
+      </button>
+      <details>
+        <summary className="small">Activity log (last 100)</summary>
+        <table className="table small">
+          <tbody>
+            {data.events.map((e) => (
+              <tr key={e.id}><td className="nowrap">{e.at}</td><td>{e.action}</td><td>{e.status}</td><td className="muted">{e.ip}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+      <ErrorText error={act.error} />
     </section>
   );
 }

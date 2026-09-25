@@ -190,6 +190,16 @@ CREATE TABLE IF NOT EXISTS reports (
   sent_at TEXT
 );
 
+-- Security audit trail: logins (ok/failed) and every admin change.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT (datetime('now')),
+  ip TEXT NOT NULL DEFAULT '',
+  action TEXT NOT NULL,                     -- "login.ok", "login.failed", "POST /api/admin/sessions/12/cancel"
+  status INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS audit_at ON audit_log(at);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -220,6 +230,7 @@ export const DEFAULT_SETTINGS = {
   payment_note: '',
   auto_invoice: 0,           // create + email last month's invoices on the 1st
   last_auto_invoice: '',
+  session_epoch: 0,          // bump to invalidate every admin session ("log out everywhere")
   gcal_synced_at: '',
   feed_token: '',
 };

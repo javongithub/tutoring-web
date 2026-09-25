@@ -381,6 +381,20 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     res.json(getInvoice(inv.id));
   });
 
+  // ---------- Security ----------
+  r.get('/audit', (_req, res) => {
+    res.json({
+      events: all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 100'),
+      failed_logins_24h: one("SELECT COUNT(*) AS n FROM audit_log WHERE action IN ('login.failed','login.blocked') AND at > datetime('now', '-1 day')").n,
+    });
+  });
+
+  // Invalidates every admin session everywhere (including this one): use if a device is lost.
+  r.post('/logout-everywhere', (_req, res) => {
+    db.prepare("UPDATE settings SET value = CAST(value AS INTEGER) + 1 WHERE key = 'session_epoch'").run();
+    res.json({ ok: true });
+  });
+
   // ---------- Progress reports ----------
   const getReport = (id) => {
     const rep = one('SELECT r.*, st.name AS student_name, st.email, st.parent_name, st.portal_token FROM reports r JOIN students st ON st.id = r.student_id WHERE r.id = ?', id);
@@ -408,6 +422,12 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
         throw Object.assign(new Error(e.message), { status: e.status || 502, expose: true });
       }
       source = 'ai';
+    }
+    // Don't pile up blank drafts: reuse an untouched one.
+    const blank = one("SELECT id FROM reports WHERE student_id = ? AND status = 'draft' AND body = ''", st.id);
+    if (blank) {
+      db.prepare('UPDATE reports SET period_from = ?, period_to = ?, body = ?, source = ? WHERE id = ?').run(from, to, body, source, blank.id);
+      return res.status(201).json(getReport(blank.id));
     }
     const id = db.prepare('INSERT INTO reports (student_id, period_from, period_to, body, source, token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(st.id, from, to, body, source, newToken(), nowLocal()).lastInsertRowid;
