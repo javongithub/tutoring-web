@@ -172,3 +172,9 @@ export interface Audit { events: AuditRow[]; failed_logins_24h: number }
 export interface NotifyTest { sent: number; pending: number; last: Pick<OutboxRow, 'channel' | 'sent_at' | 'last_error'>[] }
 
 export type ReportView = ReportRow & { student_name: string; email: string; parent_name: string; portal_token: string };
+
+export interface LaunchStatus {
+  public_url: string;
+  checklist: { key: string; label: string; done: boolean; hint: string }[];
+  families: (Pick<StudentRow, 'id' | 'name' | 'parent_name' | 'email' | 'phone' | 'portal_token'> & { invited: boolean })[];
+}

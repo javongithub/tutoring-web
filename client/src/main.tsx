@@ -18,6 +18,7 @@ import WaitlistEntry from './pages/public/WaitlistEntry.tsx';
 import Invoices from './pages/admin/Invoices.tsx';
 import Invoice from './pages/public/Invoice.tsx';
 import Report from './pages/public/Report.tsx';
+import Launch from './pages/admin/Launch.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="waitlist" element={<Waitlist />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="launch" element={<Launch />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

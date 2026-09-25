@@ -104,7 +104,8 @@ fi
 cat <<DONE
  (HTTPS can take a minute to activate the first time.)
 
- Next steps:
+ Next steps (Admin → Launch has this checklist too):
+  • Check it from outside (in Cloud Shell): bash <(curl -fsSL https://raw.githubusercontent.com/javongithub/tutoring-web/refs/heads/$BRANCH/deploy/verify.sh) https://$DOMAIN
   • Admin → Settings → Notifications: phone alerts via the ntfy app
   • Admin → Settings → Google Calendar: paste your secret iCal address, import students
   • Email: sudo nano $APP_DIR/.env  (SMTP_USER / SMTP_PASS), then: sudo systemctl restart tutoring

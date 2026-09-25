@@ -27,6 +27,8 @@ export interface StudentRow {
   next_plan: string;
   active: Flag;
   portal_token: string;
+  /** When the tutor last sent the family their link (Launch page). */
+  invited_at: string | null;
   created_at: string;
 }
 

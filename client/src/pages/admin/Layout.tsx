@@ -5,7 +5,7 @@ import { ErrorText, useAction } from '../../components/ui.tsx';
 
 const NAV: [to: string, label: string, end?: boolean][] = [
   ['/admin', 'Dashboard', true], ['/admin/calendar', 'Calendar'], ['/admin/students', 'Students'],
-  ['/admin/log', 'Tutoring log'], ['/admin/invoices', 'Invoices'], ['/admin/cancellations', 'Cancellations'], ['/admin/waitlist', 'Waitlist'], ['/admin/settings', 'Settings'],
+  ['/admin/log', 'Tutoring log'], ['/admin/invoices', 'Invoices'], ['/admin/cancellations', 'Cancellations'], ['/admin/waitlist', 'Waitlist'], ['/admin/settings', 'Settings'], ['/admin/launch', 'Launch'],
 ];
 
 export default function AdminLayout() {

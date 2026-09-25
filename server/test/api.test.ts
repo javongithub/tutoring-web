@@ -278,3 +278,17 @@ test('security: headers, CSRF guard, audit log, log out everywhere', async () =>
   h.cookie = again.headers.get('set-cookie')!.split(';')[0];
   assert.equal((await call('GET', '/api/admin/dashboard')).status, 200, 'new login works');
 });
+
+test('launch page: checklist reflects setup, invites are tracked', async () => {
+  const before = (await call('GET', '/api/admin/launch')).body;
+  const item = (k: string) => before.checklist.find((c: Json) => c.key === k);
+  assert.equal(item('students').done, true);
+  assert.equal(item('availability').done, true);
+  assert.equal(item('alerts').done, false);
+  assert.equal(item('invite').done, false);
+  assert.ok(before.families.every((f: Json) => f.portal_token && f.invited === false));
+  for (const f of before.families) await call('POST', `/api/admin/students/${f.id}/invited`);
+  const after = (await call('GET', '/api/admin/launch')).body;
+  assert.equal(after.checklist.find((c: Json) => c.key === 'invite').done, true);
+  assert.equal((await call('GET', '/api/admin/launch', null, { auth: false })).status, 401);
+});

@@ -220,6 +220,7 @@ const MIGRATIONS: [table: string, column: string, ddl: string][] = [
   ['sessions', 'reminded', 'INTEGER NOT NULL DEFAULT 0'],
   ['change_requests', 'policy_ack', 'INTEGER NOT NULL DEFAULT 0'],
   ['sessions', 'invoice_id', 'INTEGER REFERENCES invoices(id) ON DELETE SET NULL'],
+  ['students', 'invited_at', 'TEXT'],
 ];
 
 function migrate(db: DB): void {

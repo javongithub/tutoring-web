@@ -108,7 +108,9 @@ This is one Node process with a SQLite file and background sync jobs, so it need
      sudo cp ~/seed.local.json /home/tutor/tutoring-web/data/ && sudo chown tutor: /home/tutor/tutoring-web/data/seed.local.json
      sudo -iu tutor bash -c 'cd tutoring-web && npm run seed'
      ```
-4. **Update later:** re-run the same Cloud Shell command. It's safe to repeat and keeps your data and `.env`.
+4. **Check it:** `bash deploy/verify.sh https://<your-site>` checks HTTPS, the API, the admin lock and the security headers from the outside.
+5. **Go live:** open *Admin → Launch*. It shows a setup checklist, and one-tap **Text** / **Email** buttons that send each family their private link (the text opens your phone's Messages app with the invite already written).
+6. **Update later:** re-run the same Cloud Shell command. It's safe to repeat and keeps your data and `.env`.
 
 Notes:
 - **Don't "Stop" the VM** (reboots are fine). Stopping can change its IP address, and with it the sslip.io address. For a permanent address, point your own domain (or a free DuckDNS name) at the VM and re-run with `DOMAIN=yourname.duckdns.org`.

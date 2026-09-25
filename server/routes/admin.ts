@@ -8,7 +8,7 @@ import type { Notifier } from '../lib/notify.ts';
 import type { Reporter } from '../lib/reports.ts';
 import type {
   Audit, Cancellations, CancellationStat, Dashboard, InvoiceListItem, InvoicesPage, SettingsPage, StudentDetail,
-  StudentListItem, StudentStats, TutoringLog, TutoringSeries, WeekSessions,
+  LaunchStatus, StudentListItem, StudentStats, TutoringLog, TutoringSeries, WeekSessions,
 } from '../api-types.ts';
 import { type SettingKey, getSettings, newToken, DEFAULT_SETTINGS, run, scalar, tx } from '../db.ts';
 import {
@@ -401,6 +401,40 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     if (inv.status === 'paid') throw bad('Mark it unpaid first');
     voidInvoice(db, inv.id);
     res.json(getInvoice(inv.id));
+  });
+
+  // ---------- Launch: setup checklist + sharing family links ----------
+  r.get('/launch', (req, res) => {
+    const st = getSettings(db);
+    const count = (sql: string) => scalar<CountRow>(db, sql).n;
+    const families = all<LaunchStatus['families'][number]>(
+      `SELECT id, name, parent_name, email, phone, portal_token, invited_at IS NOT NULL AS invited
+         FROM students WHERE active = 1 ORDER BY name COLLATE NOCASE`,
+    ).map((f) => ({ ...f, invited: !!f.invited }));
+    res.json({
+      public_url: notify.base(origin(req)),
+      checklist: [
+        { key: 'students', label: 'Add your students and weekly schedules', done: count('SELECT COUNT(*) AS n FROM recurring WHERE active = 1') > 0,
+          hint: 'Students page, or import them from Google Calendar in Settings.' },
+        { key: 'availability', label: 'Set when families can book', done: count('SELECT COUNT(*) AS n FROM availability') > 0,
+          hint: 'Settings → When families can book.' },
+        { key: 'calendar', label: 'Sync your Google Calendar (so busy times are blocked)', done: !!st.ics_url && !st.ics_error,
+          hint: 'Settings → Google Calendar sync → paste your secret iCal address.' },
+        { key: 'alerts', label: 'Turn on phone alerts', done: !!st.ntfy_url, hint: 'Settings → Notifications → Make my link.' },
+        { key: 'payments', label: 'Add Venmo or Zelle for invoices', done: !!(st.venmo_handle || st.zelle_contact), hint: 'Settings → Payments.' },
+        { key: 'name', label: 'Set the name families see', done: st.tutor_name !== 'Tutoring', hint: 'Settings → Booking & payment → Name on public page.' },
+        { key: 'invite', label: 'Send every family their link', done: families.length > 0 && families.every((f) => f.invited),
+          hint: 'Use the Text / Email buttons below.' },
+      ],
+      families,
+    } satisfies LaunchStatus);
+  });
+
+  // Remember that a family was sent their link (shown as a check on the Launch page).
+  r.post('/students/:id/invited', (req, res) => {
+    const st = getStudent(int(req.params.id));
+    run(db, 'UPDATE students SET invited_at = ? WHERE id = ?', nowLocal(), st.id);
+    res.json({ ok: true });
   });
 
   // ---------- Security ----------
