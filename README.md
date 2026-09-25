@@ -1,4 +1,4 @@
-# Tutoring Web
+# Tutoring Web - EduPark 
 
 Booking and business manager for a solo tutor. Families request sessions on your site, you approve them, and the app tracks cancellations, a session log with notes, and what you're owed ($30/session by default).
 
