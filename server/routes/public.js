@@ -5,6 +5,7 @@ import { cancelSession, isLateCancel, materializeRecurring, occupied, openSlots 
 import { bad, bool, isEmail, notFound, rateLimit, str } from '../lib/http.js';
 import { buildFeed } from '../lib/gcal.js';
 import { sessionContext, when } from '../lib/notify.js';
+import { invoiceDetail, paymentInstructions, periodLabel } from '../lib/invoices.js';
 
 const money = (c) => `$${(c / 100).toFixed(c % 100 ? 2 : 0)}`;
 
@@ -73,6 +74,20 @@ export default function publicRoutes(db, notify) {
       max_date: addDays(today(), getSettings(db).booking_weeks_ahead * 7),
       occupied: busy.map(({ start_at, end_at, kind, label, status }) => ({ start_at, end_at, kind, label, ...(kind === 'own' ? { status } : {}) })),
       slots: openSlots(db, start, end, busy),
+    });
+  });
+
+  // ---------- Invoices ----------
+  r.get('/invoice/:token', (req, res) => {
+    const inv = invoiceDetail(db, 'i.token = ?', String(req.params.token));
+    if (!inv || inv.status === 'void') throw notFound('Invoice not found');
+    const st = getSettings(db);
+    res.json({
+      tutor_name: st.tutor_name, student: inv.student_name, parent: inv.parent_name,
+      period: inv.period, period_label: periodLabel(inv.period), status: inv.status,
+      amount_cents: inv.amount_cents, paid_at: inv.paid_at, family_token: inv.portal_token,
+      items: inv.items.map(({ start_at, end_at, status, rate_cents }) => ({ start_at, end_at, status, rate_cents })),
+      pay: paymentInstructions(db, inv),
     });
   });
 
@@ -254,6 +269,8 @@ export default function publicRoutes(db, notify) {
       parent: fam.parent_name,
       cancel_notice_hours: getSettings(db).cancel_notice_hours,
       upcoming: rows.filter((s) => s.end_at > now && s.status !== 'cancelled').map(publicSession),
+      invoices: db.prepare("SELECT token, period, amount_cents, status FROM invoices WHERE student_id = ? AND status <> 'void' ORDER BY period DESC LIMIT 6")
+        .all(fam.id).map((i) => ({ ...i, period_label: periodLabel(i.period) })),
       cancelled: rows.filter((s) => s.end_at > now && s.status === 'cancelled').map(publicSession),
       recent: rows.filter((s) => s.end_at <= now).reverse().slice(0, 8).map(publicSession),
     });

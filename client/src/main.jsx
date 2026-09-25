@@ -15,6 +15,8 @@ import Cancellations from './pages/admin/Cancellations.jsx';
 import Settings from './pages/admin/Settings.jsx';
 import Waitlist from './pages/admin/Waitlist.jsx';
 import WaitlistEntry from './pages/public/WaitlistEntry.jsx';
+import Invoices from './pages/admin/Invoices.jsx';
+import Invoice from './pages/public/Invoice.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -24,6 +26,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/booking/:token" element={<Booking />} />
         <Route path="/family/:token" element={<Family />} />
         <Route path="/waitlist/:token" element={<WaitlistEntry />} />
+        <Route path="/invoice/:token" element={<Invoice />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="calendar" element={<Calendar />} />
@@ -32,6 +35,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="log" element={<Log />} />
           <Route path="cancellations" element={<Cancellations />} />
           <Route path="waitlist" element={<Waitlist />} />
+          <Route path="invoices" element={<Invoices />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

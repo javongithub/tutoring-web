@@ -9,6 +9,9 @@ import {
 import { parseTutoringTitle } from '../lib/ics.js';
 import { bad, bool, int, notFound, str } from '../lib/http.js';
 import { flushOutbox, sessionContext, when } from '../lib/notify.js';
+import {
+  createInvoices, invoiceDetail, invoicePreview, isPeriod, markInvoicePaid, prevPeriod, sendInvoice, syncInvoiceStatus, voidInvoice,
+} from '../lib/invoices.js';
 
 const SESSION_SELECT = `
   SELECT s.*, st.name AS student_name, st.parent_name, st.next_plan AS student_next_plan
@@ -257,6 +260,10 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
       changes = db.prepare(`UPDATE sessions AS s SET paid = 1 WHERE student_id = ? AND ${BILLABLE} AND paid = 0`)
         .run(int(req.body.student_id)).changes;
     } else throw bad('Provide ids or student_id');
+    for (const { invoice_id: inv } of all(
+      `SELECT DISTINCT invoice_id FROM sessions WHERE invoice_id IS NOT NULL AND (id IN (${ids.map(() => '?').join(',') || 'NULL'}) OR student_id = ?)`,
+      ...ids, int(req.body.student_id) ?? -1,
+    )) syncInvoiceStatus(db, inv);
     res.json({ updated: changes });
   });
 
@@ -314,6 +321,64 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     tellFamily(req, c.session_id, (x) => `Request not approved: ${x.who}, ${when(x)}`,
       (x) => `Sorry — I couldn't ${c.kind === 'cancel' ? 'cancel' : 'move'} ${x.who}'s session. It stays on ${when(x)}.${note ? `\n“${note}”` : ''}\n\nYour family page:`);
     res.json(one(`${CHANGE_SELECT} WHERE c.id = ?`, c.id));
+  });
+
+  // ---------- Invoices ----------
+  const getInvoice = (id) => {
+    const inv = invoiceDetail(db, 'i.id = ?', id);
+    if (!inv) throw notFound('Invoice not found');
+    return inv;
+  };
+
+  r.get('/invoices', (req, res) => {
+    const period = isPeriod(req.query.period) ? req.query.period : prevPeriod();
+    res.json({
+      period,
+      preview: invoicePreview(db, period),
+      invoices: all(`SELECT i.*, st.name AS student_name, st.email,
+                       (SELECT COUNT(*) FROM sessions WHERE invoice_id = i.id) AS sessions
+                     FROM invoices i JOIN students st ON st.id = i.student_id
+                     WHERE i.period = ? OR i.status = 'open' ORDER BY i.period DESC, st.name COLLATE NOCASE`, period),
+    });
+  });
+
+  r.post('/invoices', (req, res) => {
+    const period = str(req.body.period);
+    if (!isPeriod(period)) throw bad('period must be YYYY-MM');
+    const ids = createInvoices(db, period, Array.isArray(req.body.student_ids) ? req.body.student_ids.map((x) => int(x)) : null);
+    let emailed = 0;
+    if (bool(req.body.send)) {
+      for (const id of ids) {
+        const inv = getInvoice(id);
+        if (inv.email) { sendInvoice(db, notify, inv, origin(req)); emailed++; }
+      }
+    }
+    res.status(201).json({ created: ids.length, emailed, no_email: ids.length - emailed });
+  });
+
+  r.get('/invoices/:id', (req, res) => res.json(getInvoice(int(req.params.id))));
+
+  r.post('/invoices/:id/send', (req, res) => {
+    const inv = getInvoice(int(req.params.id));
+    if (inv.status === 'void') throw bad('Invoice is void');
+    if (!inv.email) throw bad(`${inv.student_name} has no email on file. Copy the invoice link and text it instead.`);
+    if (!notify.emailEnabled) throw bad('Email isn’t set up on the server yet. Copy the invoice link instead.');
+    sendInvoice(db, notify, inv, origin(req));
+    res.json(getInvoice(inv.id));
+  });
+
+  r.post('/invoices/:id/paid', (req, res) => {
+    const inv = getInvoice(int(req.params.id));
+    if (inv.status === 'void') throw bad('Invoice is void');
+    markInvoicePaid(db, inv.id, req.body.paid === undefined ? true : !!bool(req.body.paid));
+    res.json(getInvoice(inv.id));
+  });
+
+  r.post('/invoices/:id/void', (req, res) => {
+    const inv = getInvoice(int(req.params.id));
+    if (inv.status === 'paid') throw bad('Mark it unpaid first');
+    voidInvoice(db, inv.id);
+    res.json(getInvoice(inv.id));
   });
 
   // ---------- Waitlist ----------
@@ -551,7 +616,8 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
     const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     const editable = ['tutor_name', 'default_rate_cents', 'slot_minutes', 'min_notice_hours', 'booking_weeks_ahead',
       'cancel_notice_hours', 'charge_late_cancels', 'ics_url', 'gcal_calendar_id',
-    'notify_email', 'ntfy_url', 'email_families', 'reminders', 'reminder_hour', 'public_url'];
+    'notify_email', 'ntfy_url', 'email_families', 'reminders', 'reminder_hour', 'public_url',
+    'venmo_handle', 'zelle_contact', 'payment_note', 'auto_invoice'];
     tx(db, () => {
       for (const k of editable) {
         if (req.body[k] === undefined) continue;
@@ -567,6 +633,7 @@ export default function adminRoutes(db, { gcalEmail = null, onChange = () => {},
         if (k === 'notify_email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw bad('Enter a valid email');
         if (k === 'public_url' && v && !/^https?:\/\/\S+$/.test(v)) throw bad('Public URL must start with https://');
         if (k === 'reminder_hour' && v > 23) throw bad('Reminder hour must be 0–23');
+        if (k === 'venmo_handle' && v && !/^@?[\w-]{3,40}$/.test(v)) throw bad('Venmo username: letters, numbers, - or _');
         up.run(k, String(v));
       }
     });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { get, post } from '../../api.js';
-import { STATUS_LABEL, fmtWhen, useLoad } from '../../util.js';
+import { STATUS_LABEL, fmtWhen, money, useLoad } from '../../util.js';
 import PublicWeek from '../../components/PublicWeek.jsx';
 import ChangeRequest, { ChangeStatus } from '../../components/ChangeRequest.jsx';
 import { ErrorText, Loading, Modal, StatusPill, useAction } from '../../components/ui.jsx';
@@ -72,6 +72,20 @@ export default function Family() {
         )}
         <ErrorText error={act.error} />
       </section>
+
+      {data.invoices.length > 0 && (
+        <section className="card">
+          <h2>Invoices</h2>
+          <ul className="list">
+            {data.invoices.map((i) => (
+              <li key={i.token} className="list-row">
+                <span>{i.period_label} · <strong>{money(i.amount_cents)}</strong> <StatusPill status={i.status === 'paid' ? 'paid' : 'pending'}>{i.status === 'paid' ? 'Paid' : 'Due'}</StatusPill></span>
+                <Link className="btn subtle" to={`/invoice/${i.token}`}>View</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2>Schedule</h2>

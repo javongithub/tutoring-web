@@ -161,6 +161,20 @@ CREATE TABLE IF NOT EXISTS waitlist_announced (
   announced_at TEXT NOT NULL
 );
 
+-- One bill per family per month. Sessions point at the invoice that covers them.
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,                     -- "2026-10"
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','paid','void')),
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  sent_at TEXT,
+  paid_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS one_invoice_per_month ON invoices(student_id, period) WHERE status <> 'void';
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -186,6 +200,11 @@ export const DEFAULT_SETTINGS = {
   reminders: 0,              // email parents the evening before each session
   reminder_hour: 18,
   public_url: '',
+  venmo_handle: '',
+  zelle_contact: '',
+  payment_note: '',
+  auto_invoice: 0,           // create + email last month's invoices on the 1st
+  last_auto_invoice: '',
   gcal_synced_at: '',
   feed_token: '',
 };
@@ -195,6 +214,7 @@ export const DEFAULT_SETTINGS = {
 const MIGRATIONS = [
   ['sessions', 'reminded', 'INTEGER NOT NULL DEFAULT 0'],
   ['change_requests', 'policy_ack', 'INTEGER NOT NULL DEFAULT 0'],
+  ['sessions', 'invoice_id', 'INTEGER REFERENCES invoices(id) ON DELETE SET NULL'],
 ];
 
 function migrate(db) {

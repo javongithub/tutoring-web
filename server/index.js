@@ -4,6 +4,7 @@ import { materializeRecurring, syncCalendar } from './lib/schedule.js';
 import { createGcal, loadServiceAccount, pushDirty } from './lib/gcal.js';
 import { createNotifier, flushOutbox, queueReminders, smtpConfig } from './lib/notify.js';
 import { announceOpenings } from './lib/waitlist.js';
+import { autoInvoice } from './lib/invoices.js';
 
 const db = openDb();
 
@@ -24,7 +25,7 @@ let flushing = false;
 const sendNotifications = async () => {
   if (flushing) return;
   flushing = true;
-  try { announceOpenings(db, notify); queueReminders(db, notify); await flushOutbox(db); } catch (e) { console.warn('[notify]', e.message); } finally { flushing = false; }
+  try { announceOpenings(db, notify); autoInvoice(db, notify); queueReminders(db, notify); await flushOutbox(db); } catch (e) { console.warn('[notify]', e.message); } finally { flushing = false; }
 };
 
 let pushing = false;

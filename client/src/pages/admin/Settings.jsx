@@ -11,6 +11,7 @@ export default function Settings() {
     <div className="page">
       <h1>Settings</h1>
       <Notifications data={data} onChanged={reload} />
+      <Payments s={data.settings} onSaved={reload} />
       <GoogleCalendar data={data} onChanged={reload} />
       <General s={data.settings} onSaved={reload} />
       <WeeklyRows
@@ -258,6 +259,26 @@ function Notifications({ data, onChanged }) {
           <ul className="small">{failed.map((m) => <li key={m.id}>{m.subject} → {m.to_addr}: {m.last_error} (tries: {m.attempts})</li>)}</ul>
         </details>
       )}
+    </section>
+  );
+}
+
+function Payments({ s, onSaved }) {
+  const [f, setF] = useState({ venmo_handle: s.venmo_handle, zelle_contact: s.zelle_contact, payment_note: s.payment_note, auto_invoice: s.auto_invoice });
+  const act = useAction();
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 1 : 0) : e.target.value });
+  return (
+    <section className="card">
+      <h2>Payments &amp; invoices</h2>
+      <p className="hint">Shown on every invoice. Venmo and Zelle have no fees (card processors take about 3%).</p>
+      <div className="grid2">
+        <label className="field"><span>Venmo username</span><input placeholder="your-venmo" value={f.venmo_handle} onChange={set('venmo_handle')} /></label>
+        <label className="field"><span>Zelle (phone or email)</span><input value={f.zelle_contact} onChange={set('zelle_contact')} /></label>
+      </div>
+      <label className="field"><span>Extra payment note (optional)</span><input placeholder="e.g. Cash or check also fine" value={f.payment_note} onChange={set('payment_note')} /></label>
+      <label className="check"><input type="checkbox" checked={!!f.auto_invoice} onChange={set('auto_invoice')} /> On the 1st of each month, automatically create and email last month&rsquo;s invoices</label>
+      <ErrorText error={act.error} />
+      <button className="btn primary" disabled={act.busy} onClick={() => act.run(async () => { await put('/admin/settings', f); onSaved(); })}>Save</button>
     </section>
   );
 }
