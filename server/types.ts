@@ -1,5 +1,15 @@
 // Row shapes for the SQLite tables (see SCHEMA in db.ts). Booleans are 0/1 integers.
-import type { DateStr, DateTimeStr } from './lib/time.ts';
+// Dependency-free on purpose: the React client imports these types too.
+
+import type { DEFAULT_SETTINGS } from './settings.ts';
+
+export type Settings = typeof DEFAULT_SETTINGS;
+export type SettingKey = keyof Settings;
+
+/** "YYYY-MM-DD" */
+export type DateStr = string;
+/** "YYYY-MM-DDTHH:MM" local wall-clock time */
+export type DateTimeStr = string;
 
 export type Flag = 0 | 1;
 export type SessionStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'declined' | 'no_show';
@@ -167,3 +177,26 @@ export interface OutboxRow {
 /** Aggregate rows. */
 export interface CountRow { n: number }
 export interface MoneyRow { n: number; cents: number }
+
+/** Something occupying the tutor's time, labelled for a particular viewer. */
+export interface Occupied {
+  start_at: DateTimeStr;
+  end_at: DateTimeStr;
+  /** 'own' = the viewing family's session, 'student' = another family, 'busy' = anything else. */
+  kind: 'own' | 'student' | 'busy';
+  label: string;
+  id?: number;
+  status?: string;
+}
+export interface Slot { start_at: DateTimeStr; end_at: DateTimeStr }
+
+export interface InvoicePreview {
+  student_id: number;
+  name: string;
+  parent_name: string;
+  email: string;
+  sessions: number;
+  amount_cents: number;
+}
+
+export interface AuditRow { id: number; at: string; ip: string; action: string; status: number }

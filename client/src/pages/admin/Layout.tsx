@@ -3,16 +3,16 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { get, post } from '../../api.ts';
 import { ErrorText, useAction } from '../../components/ui.tsx';
 
-const NAV = [
+const NAV: [to: string, label: string, end?: boolean][] = [
   ['/admin', 'Dashboard', true], ['/admin/calendar', 'Calendar'], ['/admin/students', 'Students'],
   ['/admin/log', 'Tutoring log'], ['/admin/invoices', 'Invoices'], ['/admin/cancellations', 'Cancellations'], ['/admin/waitlist', 'Waitlist'], ['/admin/settings', 'Settings'],
 ];
 
 export default function AdminLayout() {
-  const [authed, setAuthed] = useState(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const nav = useNavigate();
   useEffect(() => {
-    get('/auth/me').then((r) => setAuthed(r.admin)).catch(() => setAuthed(false));
+    get<{ admin: boolean }>('/auth/me').then((r) => setAuthed(r.admin)).catch(() => setAuthed(false));
     const onExpire = () => setAuthed(false);
     window.addEventListener('auth-expired', onExpire);
     return () => window.removeEventListener('auth-expired', onExpire);
@@ -34,7 +34,7 @@ export default function AdminLayout() {
   );
 }
 
-function Login({ onDone }) {
+function Login({ onDone }: { onDone: () => void }) {
   const [pw, setPw] = useState('');
   const { busy, error, run } = useAction();
   return (

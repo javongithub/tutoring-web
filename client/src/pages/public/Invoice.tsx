@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import type { PublicInvoice } from '../../../../server/api-types.ts';
 import { get } from '../../api.ts';
 import { copy, fmtWhen, money, useLoad } from '../../util.ts';
 import { ErrorText, Loading, StatusPill } from '../../components/ui.tsx';
@@ -6,7 +7,7 @@ import { useState } from 'react';
 
 export default function Invoice() {
   const { token } = useParams();
-  const { data: inv, error } = useLoad(() => get(`/public/invoice/${token}`), [token]);
+  const { data: inv, error } = useLoad(() => get<PublicInvoice>(`/public/invoice/${token}`), [token]);
   const [copied, setCopied] = useState(false);
   if (error) return <div className="public narrow"><ErrorText error={error} /></div>;
   if (!inv) return <div className="public narrow"><Loading /></div>;

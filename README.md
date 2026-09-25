@@ -20,7 +20,7 @@ Booking and business manager for a solo tutor. Families request sessions on your
 
 ## Run it locally
 
-Requires Node **22.13+** (uses the built-in `node:sqlite`, so there are no native modules to compile).
+Requires Node **22.18+** (uses the built-in `node:sqlite`, so there are no native modules to compile).
 
 ```bash
 npm install
@@ -120,6 +120,7 @@ A `Dockerfile` is included for Railway/Fly: mount a volume at `/data`.
 
 ## How it's built
 
+- **TypeScript, strict, end to end.** Node 22.18+ runs the server's `.ts` files directly (type stripping, no build step), and `tsc` type-checks. The client imports the same row types (`server/types.ts`) and API contract (`server/api-types.ts`), and routes check their responses against it with `satisfies`, so a renamed field breaks the build instead of the UI. `npm run check` = typecheck + tests + build. GitHub Actions runs it on every push.
 - **Backend:** Express 5 on Node's built-in SQLite (`server/`). Times are stored as local wall-clock strings (`YYYY-MM-DDTHH:MM`, `TZ_NAME`) so DST never shifts a 4:30pm session.
 - **Weekly schedules** generate one session row per week, 10 weeks ahead. Each row keeps its original `slot_key`, so moving or cancelling one week never gets undone by the generator.
 - **Privacy:** the public API only ever returns the viewer's own data. Family and booking links are unguessable tokens (the family link can be rotated). Admin uses an HMAC-signed httpOnly cookie. Login and booking are rate-limited.

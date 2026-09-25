@@ -1,13 +1,20 @@
 import { useState } from 'react';
+import type { PublicSession } from '../../../server/api-types.ts';
+import type { Slot } from '../../../server/types.ts';
 import { post } from '../api.ts';
 import { fmtWhen } from '../util.ts';
 import PublicWeek from './PublicWeek.tsx';
 import { ErrorText, Modal, useAction } from './ui.tsx';
 
 // Family asks to cancel or move a session. Nothing changes until the tutor approves.
-export default function ChangeRequest({ session, family, onClose, onDone }) {
-  const [kind, setKind] = useState('reschedule');
-  const [slot, setSlot] = useState(null);
+export default function ChangeRequest({ session, family, onClose, onDone }: {
+  session: PublicSession;
+  family?: string | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [kind, setKind] = useState<'reschedule' | 'cancel'>('reschedule');
+  const [slot, setSlot] = useState<Slot | null>(null);
   const [reason, setReason] = useState('');
   const [ack, setAck] = useState(false);
   const late = !!session.late_window;
@@ -58,12 +65,12 @@ export default function ChangeRequest({ session, family, onClose, onDone }) {
   );
 }
 
-export function ChangeStatus({ s }) {
+export function ChangeStatus({ s }: { s: PublicSession }) {
   if (s.change_request) {
     const c = s.change_request;
     return (
       <p className="notice pending">
-        Waiting for approval: {c.kind === 'cancel' ? 'cancel this session' : `move to ${fmtWhen(c.new_start_at, c.new_end_at)}`}
+        Waiting for approval: {c.kind === 'cancel' ? 'cancel this session' : `move to ${fmtWhen(c.new_start_at ?? "", c.new_end_at)}`}
       </p>
     );
   }

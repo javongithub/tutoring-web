@@ -1,5 +1,5 @@
 import { type DB, all, getSettings, newToken, run, setSetting, tx } from '../db.ts';
-import type { CalendarEventRow, Flag, RuleRow, SessionRow, WeeklyRow } from '../types.ts';
+import type { CalendarEventRow, Flag, Occupied, RuleRow, SessionRow, Slot, WeeklyRow } from '../types.ts';
 import { expandIcs, isTutoring } from './ics.ts';
 import {
   type DateStr, type DateTimeStr, addDays, addMinutes, isDate, nowLocal, overlaps, today, toMs, weekday,
@@ -8,17 +8,7 @@ import {
 const HORIZON_DAYS = 70;
 const ACTIVE = "('pending','confirmed','completed','no_show')";
 
-/** Something occupying the tutor's time, labelled for a particular viewer. */
-export interface Occupied {
-  start_at: DateTimeStr;
-  end_at: DateTimeStr;
-  /** 'own' = the viewing family's session, 'student' = another family, 'busy' = anything else. */
-  kind: 'own' | 'student' | 'busy';
-  label: string;
-  id?: number;
-  status?: string;
-}
-export interface Slot { start_at: DateTimeStr; end_at: DateTimeStr }
+export type { Occupied, Slot };
 
 // Make sure every active weekly rule has concrete session rows through the horizon.
 // Rows are generated once (UNIQUE(recurring_id, slot_key)), so cancelling, moving or

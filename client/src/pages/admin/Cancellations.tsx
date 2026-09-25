@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
+import type { Cancellations } from '../../../../server/api-types.ts';
+import type { ChangeView } from '../../../../server/types.ts';
 import { get } from '../../api.ts';
 import { fmtWhen, money, useLoad } from '../../util.ts';
 import { ErrorText, Loading } from '../../components/ui.tsx';
 
 export default function Cancellations() {
-  const { data, error } = useLoad(() => get('/admin/cancellations'));
-  const { data: changes } = useLoad(() => get('/admin/changes'));
+  const { data, error } = useLoad(() => get<Cancellations>('/admin/cancellations'));
+  const { data: changes } = useLoad(() => get<ChangeView[]>('/admin/changes'));
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
   return (
@@ -64,7 +66,7 @@ export default function Cancellations() {
               <li key={c.id} className="list-row col">
                 <div>
                   <strong>{c.student_name}</strong> asked to {c.kind === 'cancel' ? 'cancel' : 'move'} {fmtWhen(c.start_at)}
-                  {c.kind === 'reschedule' && <> → {fmtWhen(c.new_start_at)}</>}{' '}
+                  {c.kind === 'reschedule' && c.new_start_at && <> → {fmtWhen(c.new_start_at)}</>}{' '}
                   <span className={`tag ${c.status}`}>{c.status}</span>
                 </div>
                 <div className="small muted">Asked {c.requested_at.replace('T', ' ')}{c.reason ? ` · “${c.reason}”` : ''}{c.tutor_note ? ` · your note: “${c.tutor_note}”` : ''}</div>

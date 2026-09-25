@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
-export function Modal({ title, onClose, children, wide }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h2>{title}</h2>
@@ -19,11 +19,12 @@ export function Modal({ title, onClose, children, wide }) {
   );
 }
 
-export const ErrorText = ({ error }) => (error ? <p className="error" role="alert">{error.message || String(error)}</p> : null);
+export const ErrorText = ({ error }: { error: Error | string | null | undefined }) =>
+  (error ? <p className="error" role="alert">{typeof error === 'string' ? error : error.message}</p> : null);
 
 export const Loading = () => <p className="muted">Loading…</p>;
 
-export function Stat({ label, value, sub }) {
+export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
     <div className="stat">
       <div className="stat-label">{label}</div>
@@ -33,17 +34,17 @@ export function Stat({ label, value, sub }) {
   );
 }
 
-export function StatusPill({ status, children }) {
+export function StatusPill({ status, children }: { status: string; children: ReactNode }) {
   return <span className={`pill pill-${status}`}>{children}</span>;
 }
 
-// Button that runs an async action and shows errors inline.
+// Runs an async action and exposes busy/error state for buttons and forms.
 export function useAction() {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const run = async (fn) => {
+  const [error, setError] = useState<Error | null>(null);
+  const run = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true); setError(null);
-    try { return await fn(); } catch (e) { setError(e); return undefined; } finally { setBusy(false); }
+    try { return await fn(); } catch (e) { setError(e instanceof Error ? e : new Error(String(e))); return undefined; } finally { setBusy(false); }
   };
   return { busy, error, run, setError };
 }

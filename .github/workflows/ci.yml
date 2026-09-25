@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Type-check (server + client, strict)
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Dependency audit (production deps)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Deploy scripts parse
+        run: bash -n deploy/setup-vm.sh && bash -n deploy/gcp-create.sh

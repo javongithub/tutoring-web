@@ -1,21 +1,28 @@
 import { useState } from 'react';
+import type { SessionStatus, SessionView } from '../../../../server/types.ts';
+import type { StudentListItem, WeekSessions } from '../../../../server/api-types.ts';
 import { get, post } from '../../api.ts';
 import { addDays, useLoad, weekStart, weekday } from '../../util.ts';
-import WeekGrid, { Legend, WeekNav } from '../../components/WeekGrid.tsx';
+import WeekGrid, { type GridItem, type ItemKind, Legend, WeekNav } from '../../components/WeekGrid.tsx';
 import SessionModal from '../../components/SessionModal.tsx';
 import { ErrorText, Loading, Modal, useAction } from '../../components/ui.tsx';
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
+// How each session status is drawn on the calendar (declined requests aren't shown).
+const KIND: Record<Exclude<SessionStatus, 'declined'>, ItemKind> = {
+  pending: 'pending', confirmed: 'own', completed: 'done', cancelled: 'cancelled', no_show: 'cancelled',
+};
+
 export default function Calendar() {
   const today = localToday();
   const [start, setStart] = useState(weekStart(today));
-  const { data, error, reload } = useLoad(() => get(`/admin/sessions?from=${start}&to=${addDays(start, 7)}`), [start]);
-  const [open, setOpen] = useState(null);
+  const { data, error, reload } = useLoad(() => get<WeekSessions>(`/admin/sessions?from=${start}&to=${addDays(start, 7)}`), [start]);
+  const [open, setOpen] = useState<SessionView | null>(null);
   const [adding, setAdding] = useState(false);
   if (error) return <ErrorText error={error} />;
 
-  const items = [];
+  const items: GridItem[] = [];
   if (data) {
     const appStarts = new Set(data.sessions.filter((s) => s.student_id).map((s) => s.start_at));
     for (const s of data.sessions) {
@@ -24,7 +31,7 @@ export default function Calendar() {
         start_at: s.start_at, end_at: s.end_at,
         title: s.student_name || `${s.requester_student} (request)`,
         sub: s.status === 'confirmed' ? '' : { pending: 'Needs approval', completed: 'Done', cancelled: `Cancelled${s.cancelled_by === 'client' ? ' by family' : ''}`, no_show: 'No-show' }[s.status],
-        kind: { pending: 'pending', confirmed: 'own', completed: 'done', cancelled: 'cancelled', no_show: 'cancelled' }[s.status],
+        kind: KIND[s.status],
         onClick: () => setOpen(s),
       });
     }
@@ -35,7 +42,7 @@ export default function Calendar() {
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
       for (const b of data.blocks.filter((x) => x.weekday === weekday(d))) {
-        items.push({ start_at: `${d}T${b.start_time}`, end_at: `${d}T${b.end_time}`, title: b.label, kind: 'busy' });
+        items.push({ start_at: `${d}T${b.start_time}`, end_at: `${d}T${b.end_time}`, title: b.label ?? 'Busy', kind: 'busy' });
       }
     }
   }
@@ -55,8 +62,10 @@ export default function Calendar() {
   );
 }
 
-export function AddSession({ onClose, onDone, defaultDate, studentId }) {
-  const { data: students } = useLoad(() => get('/admin/students'));
+export function AddSession({ onClose, onDone, defaultDate, studentId }: {
+  onClose: () => void; onDone: () => void; defaultDate: string; studentId?: number;
+}) {
+  const { data: students } = useLoad(() => get<StudentListItem[]>('/admin/students'));
   const [f, setF] = useState({ student_id: studentId || '', start_at: `${defaultDate}T15:30`, duration_min: 60, repeat_weekly: false });
   const { busy, error, run } = useAction();
   return (

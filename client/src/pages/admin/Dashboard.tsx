@@ -1,19 +1,21 @@
 import { useState } from 'react';
-import { get, post } from '../../api.ts';
+import type { ChangeView, SessionView } from '../../../../server/types.ts';
+import type { Dashboard } from '../../../../server/api-types.ts';
+import { ApiError, get, post } from '../../api.ts';
 import { fmtDate, fmtRange, fmtWhen, money, useLoad } from '../../util.ts';
 import SessionModal from '../../components/SessionModal.tsx';
 import { ErrorText, Loading, Stat, useAction } from '../../components/ui.tsx';
 
 export default function Dashboard() {
-  const { data, error, reload } = useLoad(() => get('/admin/dashboard'));
-  const [open, setOpen] = useState(null);
+  const { data, error, reload } = useLoad(() => get<Dashboard>('/admin/dashboard'));
+  const [open, setOpen] = useState<SessionView | null>(null);
   const act = useAction();
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
   const e = data.earnings;
   const requests = data.pending.length + data.changes.length;
 
-  const decide = (c, approve) => act.run(async () => {
+  const decide = (c: ChangeView, approve: boolean) => act.run(async () => {
     let body = {};
     if (!approve) {
       const note = window.prompt('Note to the family (optional):', '');
@@ -23,7 +25,7 @@ export default function Dashboard() {
     try {
       await post(`/admin/changes/${c.id}/${approve ? 'approve' : 'decline'}`, body);
     } catch (err) {
-      if (err.status === 409 && window.confirm(`${err.message}\n\nApprove anyway?`)) {
+      if (err instanceof ApiError && err.status === 409 && window.confirm(`${err.message}\n\nApprove anyway?`)) {
         await post(`/admin/changes/${c.id}/approve`, { force: 1 });
       } else throw err;
     }
@@ -63,7 +65,7 @@ export default function Dashboard() {
                 <div>
                   {c.kind === 'cancel'
                     ? <>{fmtWhen(c.start_at, c.end_at)}</>
-                    : <>{fmtWhen(c.start_at, c.end_at)} → <strong>{fmtWhen(c.new_start_at, c.new_end_at)}</strong></>}
+                    : <>{fmtWhen(c.start_at, c.end_at)} → <strong>{fmtWhen(c.new_start_at ?? '', c.new_end_at)}</strong></>}
                   {c.late ? <span className="tag late" title="Asked inside the 24-hour window; family ticked that they understand the policy">late · policy acknowledged</span> : null}
                 </div>
                 {c.reason && <div className="muted small">“{c.reason}”</div>}

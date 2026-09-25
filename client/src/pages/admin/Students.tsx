@@ -1,11 +1,13 @@
 import { useState } from 'react';
+import type { StudentRow } from '../../../../server/types.ts';
+import type { StudentListItem } from '../../../../server/api-types.ts';
 import { Link, useNavigate } from 'react-router-dom';
 import { get, post } from '../../api.ts';
-import { fmtWhen, money, useLoad } from '../../util.ts';
+import { fmtWhen, money, useLoad, type FieldEvent } from '../../util.ts';
 import { ErrorText, Loading, Modal, useAction } from '../../components/ui.tsx';
 
 export default function Students() {
-  const { data, error } = useLoad(() => get('/admin/students'));
+  const { data, error } = useLoad(() => get<StudentListItem[]>('/admin/students'));
   const [adding, setAdding] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   if (error) return <ErrorText error={error} />;
@@ -40,14 +42,14 @@ export default function Students() {
   );
 }
 
-function AddStudent({ onClose }) {
+function AddStudent({ onClose }: { onClose: () => void }) {
   const [f, setF] = useState({ name: '', parent_name: '', email: '', phone: '', subject: '', grade: '' });
   const { busy, error, run } = useAction();
   const nav = useNavigate();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: e.target.value });
   return (
     <Modal title="Add student" onClose={onClose}>
-      <form className="form" onSubmit={(e) => { e.preventDefault(); run(async () => { const s = await post('/admin/students', f); nav(`/admin/students/${s.id}`); }); }}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); run(async () => { const s = await post<StudentRow>('/admin/students', f); nav(`/admin/students/${s.id}`); }); }}>
         <div className="grid2">
           <label className="field"><span>Student name</span><input required value={f.name} onChange={set('name')} autoFocus /></label>
           <label className="field"><span>Parent</span><input value={f.parent_name} onChange={set('parent_name')} /></label>

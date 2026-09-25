@@ -2,6 +2,9 @@ import { type Request, Router } from 'express';
 import { type DB, all, getSettings, newToken, one as q1, run, scalar } from '../db.ts';
 import type { ChangeRow, CountRow, InvoiceRow, ReportRow, SessionRow, StudentRow, WaitlistRow } from '../types.ts';
 import type { Notifier } from '../lib/notify.ts';
+import type {
+  FamilyPage, PublicBooking, PublicInfo, PublicInvoice, PublicReport, PublicSession, PublicWaitlistEntry, PublicWeek,
+} from '../api-types.ts';
 import type { SQLInputValue } from 'node:sqlite';
 import { addDays, addMinutes, fmtWhen, isDate, isDateTime, minutesBetween, nowLocal, today, weekStart } from '../lib/time.ts';
 import { cancelSession, isLateCancel, materializeRecurring, occupied, openSlots } from '../lib/schedule.ts';
@@ -47,7 +50,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       + (st.charge_late_cancels ? `, and a late cancellation is charged the full session fee (${money(st.default_rate_cents)}).` : '.');
   };
 
-  const publicSession = (s: SessionRow & { student_name?: string | null }) => ({
+  const publicSession = (s: SessionRow & { student_name?: string | null }): PublicSession => ({
     token: s.token, start_at: s.start_at, end_at: s.end_at, status: s.status,
     student: s.student_name || s.requester_student, cancelled_by: s.cancelled_by, late_cancel: s.late_cancel,
     change_request: openChange(s.id), last_decision: lastDecision(s.id),
@@ -64,7 +67,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       tutor_name: s.tutor_name, slot_minutes: s.slot_minutes, booking_weeks_ahead: s.booking_weeks_ahead,
       cancel_notice_hours: s.cancel_notice_hours, min_notice_hours: s.min_notice_hours, today: today(),
       rate_cents: s.default_rate_cents,
-    });
+    } satisfies PublicInfo);
   });
 
   // One week of the tutor's schedule: open slots plus labelled busy blocks.
@@ -80,7 +83,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       max_date: addDays(today(), getSettings(db).booking_weeks_ahead * 7),
       occupied: busy.map(({ start_at, end_at, kind, label, status }) => ({ start_at, end_at, kind, label, ...(kind === 'own' ? { status } : {}) })),
       slots: openSlots(db, start, end, busy),
-    });
+    } satisfies PublicWeek);
   });
 
   // ---------- Progress reports ----------
@@ -91,7 +94,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       String(req.params.token),
     );
     if (!rep) throw notFound('Report not found');
-    res.json({ ...rep, tutor_name: getSettings(db).tutor_name });
+    res.json({ ...rep, tutor_name: getSettings(db).tutor_name } satisfies PublicReport);
   });
 
   // ---------- Invoices ----------
@@ -105,7 +108,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       amount_cents: inv.amount_cents, paid_at: inv.paid_at, family_token: inv.portal_token,
       items: inv.items.map(({ start_at, end_at, status, rate_cents }) => ({ start_at, end_at, status, rate_cents })),
       pay: paymentInstructions(db, inv),
-    });
+    } satisfies PublicInvoice);
   });
 
   // ---------- Waitlist ----------
@@ -142,7 +145,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
   r.get('/waitlist/:token', (req, res) => {
     const w = one<Pick<WaitlistRow, 'student_name' | 'status' | 'weekdays' | 'created_at'>>('SELECT student_name, status, weekdays, created_at FROM waitlist WHERE token = ?', String(req.params.token));
     if (!w) throw notFound('Waitlist entry not found');
-    res.json(w);
+    res.json(w satisfies PublicWaitlistEntry);
   });
 
   r.post('/waitlist/:token/leave', (req, res) => {
@@ -203,7 +206,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
       ...publicSession(s),
       // Once confirmed, hand the family their portal link so they can see and manage future sessions.
       family_token: ['confirmed', 'completed'].includes(s.status) ? s.portal_token : null,
-    });
+    } satisfies PublicBooking);
   });
 
   const limiter = rateLimit({ max: 20, windowMs: 60 * 60 * 1000 });
@@ -295,7 +298,7 @@ export default function publicRoutes(db: DB, notify: Notifier) {
         fam.id).map((i) => ({ ...i, period_label: periodLabel(i.period) })),
       cancelled: rows.filter((s) => s.end_at > now && s.status === 'cancelled').map(publicSession),
       recent: rows.filter((s) => s.end_at <= now).reverse().slice(0, 8).map(publicSession),
-    });
+    } satisfies FamilyPage);
   });
 
   return r;

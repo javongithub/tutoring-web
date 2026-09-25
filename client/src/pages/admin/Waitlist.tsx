@@ -1,14 +1,15 @@
 import { get, patch } from '../../api.ts';
+import type { WaitlistRow } from '../../../../server/types.ts';
 import { DAYS, useLoad } from '../../util.ts';
 import { ErrorText, Loading, useAction } from '../../components/ui.tsx';
 
 export default function Waitlist() {
-  const { data, error, reload } = useLoad(() => get('/admin/waitlist'));
+  const { data, error, reload } = useLoad(() => get<WaitlistRow[]>('/admin/waitlist'));
   const act = useAction();
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
   const active = data.filter((w) => w.status === 'active');
-  const set = (w, status) => act.run(async () => { await patch(`/admin/waitlist/${w.id}`, { status }); reload(); });
+  const set = (w: WaitlistRow, status: WaitlistRow['status']) => act.run(async () => { await patch(`/admin/waitlist/${w.id}`, { status }); reload(); });
   return (
     <div className="page">
       <h1>Waitlist</h1>

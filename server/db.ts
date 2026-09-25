@@ -2,6 +2,7 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { DEFAULT_SETTINGS } from './settings.ts';
 
 export const newToken = (): string => randomBytes(18).toString('base64url');
 
@@ -206,37 +207,10 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `;
 
-export const DEFAULT_SETTINGS = {
-  tutor_name: 'Tutoring',
-  default_rate_cents: 3000,
-  slot_minutes: 60,
-  min_notice_hours: 24,
-  booking_weeks_ahead: 4,
-  cancel_notice_hours: 24,
-  charge_late_cancels: 0,
-  ics_url: '',
-  ics_synced_at: '',
-  ics_error: '',
-  gcal_calendar_id: '',
-  gcal_error: '',
-  notify_email: '',          // where YOU get emailed about requests
-  ntfy_url: '',              // e.g. https://ntfy.sh/tutoring-x7k2… for phone push
-  email_families: 1,         // email parents about confirmations, decisions, changes
-  reminders: 0,              // email parents the evening before each session
-  reminder_hour: 18,
-  public_url: '',
-  venmo_handle: '',
-  zelle_contact: '',
-  payment_note: '',
-  auto_invoice: 0,           // create + email last month's invoices on the 1st
-  last_auto_invoice: '',
-  session_epoch: 0,          // bump to invalidate every admin session ("log out everywhere")
-  gcal_synced_at: '',
-  feed_token: '',
-};
+export { DEFAULT_SETTINGS };
 
-export type Settings = typeof DEFAULT_SETTINGS;
-export type SettingKey = keyof Settings;
+export type { Settings, SettingKey } from './types.ts';
+import type { Settings, SettingKey } from './types.ts';
 export type DB = DatabaseSync;
 type Param = SQLInputValue;
 

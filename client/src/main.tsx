@@ -19,7 +19,7 @@ import Invoices from './pages/admin/Invoices.tsx';
 import Invoice from './pages/public/Invoice.tsx';
 import Report from './pages/public/Report.tsx';
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>

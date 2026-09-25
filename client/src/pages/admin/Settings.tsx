@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
+import type { Audit, NotifyTest, SettingsPage, TutoringSeries } from '../../../../server/api-types.ts';
+import type { Settings, WeeklyRow } from '../../../../server/types.ts';
 import { get, post, put } from '../../api.ts';
-import { DAYS, DAYS_LONG, copy, fmtTime, useLoad } from '../../util.ts';
+import { DAYS, DAYS_LONG, copy, fmtTime, useLoad, type FieldEvent, fieldValue } from '../../util.ts';
 import { ErrorText, Loading, useAction } from '../../components/ui.tsx';
 
 export default function Settings() {
-  const { data, error, reload } = useLoad(() => get('/admin/settings'));
+  const { data, error, reload } = useLoad(() => get<SettingsPage>('/admin/settings'));
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
   return (
@@ -29,11 +31,11 @@ export default function Settings() {
   );
 }
 
-function General({ s, onSaved }) {
+function General({ s, onSaved }: { s: Settings; onSaved: () => void }) {
   const [f, setF] = useState({ ...s, rate: s.default_rate_cents / 100 });
   const { busy, error, run } = useAction();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 1 : 0) : e.target.value });
-  const save = (e) => {
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: fieldValue(e) });
+  const save = (e: FormEvent) => {
     e.preventDefault();
     run(async () => {
       await put('/admin/settings', {
@@ -64,11 +66,13 @@ function General({ s, onSaved }) {
   );
 }
 
-function WeeklyRows({ title, hint, rows: initial, path, withLabel, onSaved }) {
-  const [rows, setRows] = useState(initial);
+function WeeklyRows({ title, hint, rows: initial, path, withLabel = false, onSaved }: {
+  title: string; hint: string; rows: WeeklyRow[]; path: string; withLabel?: boolean; onSaved: () => void;
+}) {
+  const [rows, setRows] = useState<Omit<WeeklyRow, 'id'>[]>(initial);
   useEffect(() => setRows(initial), [initial]);
   const { busy, error, run } = useAction();
-  const upd = (i, k, v) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const upd = (i: number, k: keyof WeeklyRow, v: string | number) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   return (
     <section className="card">
       <h2>{title}</h2>
@@ -94,7 +98,7 @@ function WeeklyRows({ title, hint, rows: initial, path, withLabel, onSaved }) {
   );
 }
 
-function GoogleCalendar({ data, onChanged }) {
+function GoogleCalendar({ data, onChanged }: { data: SettingsPage; onChanged: () => void }) {
   const s = data.settings;
   const [ics, setIcs] = useState(s.ics_url);
   const [calId, setCalId] = useState(s.gcal_calendar_id);
@@ -157,9 +161,9 @@ function GoogleCalendar({ data, onChanged }) {
 
 // Weekly "… Tutoring" series found on Google Calendar that aren't students in the app yet.
 function ImportTutoring() {
-  const { data, error, reload } = useLoad(() => get('/admin/calendar/tutoring'));
-  const [names, setNames] = useState({});
-  const [picked, setPicked] = useState({});
+  const { data, error, reload } = useLoad(() => get<TutoringSeries[]>('/admin/calendar/tutoring'));
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
   const act = useAction();
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
@@ -190,19 +194,19 @@ function ImportTutoring() {
 
 const randomTopic = () => `tutoring-${Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14)}`;
 
-function Notifications({ data, onChanged }) {
+function Notifications({ data, onChanged }: { data: SettingsPage; onChanged: () => void }) {
   const s = data.settings;
   const [f, setF] = useState({
     notify_email: s.notify_email, ntfy_url: s.ntfy_url, email_families: s.email_families,
     reminders: s.reminders, reminder_hour: s.reminder_hour, public_url: s.public_url,
   });
-  const [test, setTest] = useState(null);
+  const [test, setTest] = useState<NotifyTest | null>(null);
   const act = useAction();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 1 : 0) : e.target.value });
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: fieldValue(e) });
   const save = () => act.run(async () => { await put('/admin/settings', f); onChanged(); });
   const sendTest = () => act.run(async () => {
     await put('/admin/settings', f);
-    setTest(await post('/admin/notify/test'));
+    setTest(await post<NotifyTest>('/admin/notify/test'));
     onChanged();
   });
   const failed = data.outbox.filter((m) => !m.sent_at && m.last_error);
@@ -264,10 +268,10 @@ function Notifications({ data, onChanged }) {
   );
 }
 
-function Payments({ s, onSaved }) {
+function Payments({ s, onSaved }: { s: Settings; onSaved: () => void }) {
   const [f, setF] = useState({ venmo_handle: s.venmo_handle, zelle_contact: s.zelle_contact, payment_note: s.payment_note, auto_invoice: s.auto_invoice });
   const act = useAction();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target.checked ? 1 : 0) : e.target.value });
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: fieldValue(e) });
   return (
     <section className="card">
       <h2>Payments &amp; invoices</h2>
@@ -285,7 +289,7 @@ function Payments({ s, onSaved }) {
 }
 
 function Security() {
-  const { data } = useLoad(() => get('/admin/audit'));
+  const { data } = useLoad(() => get<Audit>('/admin/audit'));
   const act = useAction();
   if (!data) return null;
   return (

@@ -1,11 +1,12 @@
 import { Link, useParams } from 'react-router-dom';
+import type { PublicReport } from '../../../../server/api-types.ts';
 import { get } from '../../api.ts';
 import { useLoad } from '../../util.ts';
 import { ErrorText, Loading } from '../../components/ui.tsx';
 
 export default function Report() {
   const { token } = useParams();
-  const { data, error } = useLoad(() => get(`/public/report/${token}`), [token]);
+  const { data, error } = useLoad(() => get<PublicReport>(`/public/report/${token}`), [token]);
   if (error) return <div className="public narrow"><ErrorText error={error} /></div>;
   if (!data) return <div className="public narrow"><Loading /></div>;
   return (

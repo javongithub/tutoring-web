@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { PublicBooking } from '../../../../server/api-types.ts';
 import { Link, useParams } from 'react-router-dom';
 import { get, post } from '../../api.ts';
 import { STATUS_LABEL, fmtWhen, useLoad } from '../../util.ts';
@@ -7,7 +8,7 @@ import { ErrorText, Loading, StatusPill, useAction } from '../../components/ui.t
 
 export default function Booking() {
   const { token } = useParams();
-  const { data: s, error, reload } = useLoad(() => get(`/public/booking/${token}`), [token]);
+  const { data: s, error, reload } = useLoad(() => get<PublicBooking>(`/public/booking/${token}`), [token]);
   const [changing, setChanging] = useState(false);
   const act = useAction();
   if (error) return <div className="public"><ErrorText error={error} /></div>;

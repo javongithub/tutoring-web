@@ -1,21 +1,22 @@
 import { useState } from 'react';
+import type { InvoiceCreated, InvoicesPage } from '../../../../server/api-types.ts';
 import { get, post } from '../../api.ts';
 import { copy, money, useLoad } from '../../util.ts';
 import { ErrorText, Loading, StatusPill, useAction } from '../../components/ui.tsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const label = (p) => `${MONTHS[Number(p.slice(5, 7)) - 1]} ${p.slice(0, 4)}`;
+const label = (p: string): string => `${MONTHS[Number(p.slice(5, 7)) - 1]} ${p.slice(0, 4)}`;
 
 export default function Invoices() {
   const [period, setPeriod] = useState('');
-  const { data, error, reload } = useLoad(() => get(`/admin/invoices${period ? `?period=${period}` : ''}`), [period]);
+  const { data, error, reload } = useLoad(() => get<InvoicesPage>(`/admin/invoices${period ? `?period=${period}` : ''}`), [period]);
   const act = useAction();
-  const [result, setResult] = useState(null);
-  const [copied, setCopied] = useState(null);
+  const [result, setResult] = useState<InvoiceCreated | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
   const total = data.preview.reduce((c, p) => c + p.amount_cents, 0);
-  const doAct = (fn) => act.run(async () => { await fn(); reload(); });
+  const doAct = (fn: () => Promise<unknown>) => act.run(async () => { await fn(); reload(); });
 
   return (
     <div className="page">
@@ -37,10 +38,10 @@ export default function Invoices() {
               ))}
             </ul>
             <div className="actions left">
-              <button className="btn primary" disabled={act.busy} onClick={() => doAct(async () => setResult(await post('/admin/invoices', { period: data.period, send: true })))}>
+              <button className="btn primary" disabled={act.busy} onClick={() => doAct(async () => setResult(await post<InvoiceCreated>('/admin/invoices', { period: data.period, send: true })))}>
                 Create &amp; email {data.preview.length} invoice{data.preview.length === 1 ? '' : 's'} ({money(total)})
               </button>
-              <button className="btn" disabled={act.busy} onClick={() => doAct(async () => setResult(await post('/admin/invoices', { period: data.period })))}>Create without emailing</button>
+              <button className="btn" disabled={act.busy} onClick={() => doAct(async () => setResult(await post<InvoiceCreated>('/admin/invoices', { period: data.period })))}>Create without emailing</button>
             </div>
           </>
         )}

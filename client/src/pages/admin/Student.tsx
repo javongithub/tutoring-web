@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
+import type { RuleRow, SessionView, StudentRow } from '../../../../server/types.ts';
+import type { StudentDetail } from '../../../../server/api-types.ts';
 import { useNavigate, useParams } from 'react-router-dom';
 import { del, get, patch, post } from '../../api.ts';
 import ReportsCard from '../../components/Reports.tsx';
-import { DAYS_LONG, STATUS_LABEL, copy, fmtTime, fmtWhen, money, useLoad } from '../../util.ts';
+import { DAYS_LONG, STATUS_LABEL, copy, fmtTime, fmtWhen, money, useLoad, type FieldEvent } from '../../util.ts';
 import SessionModal from '../../components/SessionModal.tsx';
 import { ErrorText, Loading, Stat, StatusPill, useAction } from '../../components/ui.tsx';
 import { AddSession } from './Calendar.tsx';
 
 export default function Student() {
   const { id } = useParams();
-  const { data, error, reload } = useLoad(() => get(`/admin/students/${id}`), [id]);
-  const [open, setOpen] = useState(null);
+  const { data, error, reload } = useLoad(() => get<StudentDetail>(`/admin/students/${id}`), [id]);
+  const [open, setOpen] = useState<SessionView | null>(null);
   const [adding, setAdding] = useState(false);
   if (error) return <ErrorText error={error} />;
   if (!data) return <Loading />;
@@ -76,7 +78,7 @@ export default function Student() {
   );
 }
 
-function NotesCard({ st, onSaved }) {
+function NotesCard({ st, onSaved }: { st: StudentRow; onSaved: () => void }) {
   const [f, setF] = useState({ next_plan: st.next_plan, notes: st.notes });
   useEffect(() => setF({ next_plan: st.next_plan, notes: st.notes }), [st.next_plan, st.notes]);
   const { busy, error, run } = useAction();
@@ -97,7 +99,7 @@ function NotesCard({ st, onSaved }) {
   );
 }
 
-function Schedule({ st, rules, onChanged }) {
+function Schedule({ st, rules, onChanged }: { st: StudentRow; rules: RuleRow[]; onChanged: () => void }) {
   const [f, setF] = useState({ weekday: 1, start_time: '15:30', duration_min: 60 });
   const { busy, error, run } = useAction();
   return (
@@ -125,9 +127,9 @@ function Schedule({ st, rules, onChanged }) {
   );
 }
 
-const addMin = (t, m) => { const [h, mi] = t.split(':').map(Number); const x = h * 60 + mi + m; return `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+const addMin = (t: string, m: number): string => { const [h, mi] = t.split(':').map(Number); const x = h * 60 + mi + m; return `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
 
-function FamilyPortal({ st, onChanged }) {
+function FamilyPortal({ st, onChanged }: { st: StudentRow; onChanged: () => void }) {
   const [copied, setCopied] = useState(false);
   const url = `${window.location.origin}/family/${st.portal_token}`;
   return (
@@ -143,12 +145,12 @@ function FamilyPortal({ st, onChanged }) {
   );
 }
 
-function Profile({ st, onSaved }) {
-  const [f, setF] = useState(st);
+function Profile({ st, onSaved }: { st: StudentRow; onSaved: () => void }) {
+  const [f, setF] = useState<StudentRow & { rate_dollars?: string }>(st);
   useEffect(() => setF(st), [st]);
   const { busy, error, run } = useAction();
   const nav = useNavigate();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: e.target.value });
   return (
     <section className="card">
       <h2>Profile</h2>

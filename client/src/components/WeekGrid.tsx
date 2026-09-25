@@ -1,21 +1,41 @@
+import type { CSSProperties, MouseEventHandler } from 'react';
+import type { Slot } from '../../../server/types.ts';
 import { DAYS, addDays, fmtRange, fmtTime, minutesOf } from '../util.ts';
+
+export type ItemKind = 'own' | 'pending' | 'done' | 'cancelled' | 'other' | 'busy' | 'slot';
+export interface GridItem {
+  start_at: string;
+  end_at: string;
+  title: string;
+  sub?: string;
+  kind: ItemKind;
+  onClick?: MouseEventHandler;
+}
 
 const PX_PER_HOUR = 52;
 
 // Google-Calendar-style week. `items` are drawn blocks; `slots` are clickable open times.
-// item: { start_at, end_at, title, sub, kind, onClick }
-export default function WeekGrid({ start, items = [], slots = [], onSlot, today, minHour, maxHour, selected }) {
+export default function WeekGrid({ start, items = [], slots = [], onSlot, today, minHour, maxHour, selected }: {
+  start: string;
+  items?: GridItem[];
+  slots?: Slot[];
+  onSlot?: (s: Slot) => void;
+  today?: string;
+  minHour?: number;
+  maxHour?: number;
+  selected?: string;
+}) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const all = [...items, ...slots];
   const lo = Math.min(minHour ?? 15, ...all.map((x) => Math.floor(minutesOf(x.start_at) / 60)));
   const hi = Math.max(maxHour ?? 20, ...all.map((x) => Math.ceil(minutesOf(x.end_at.slice(0, 10) > x.start_at.slice(0, 10) ? '23:59' : x.end_at) / 60)));
   const hours = Array.from({ length: hi - lo }, (_, i) => lo + i);
-  const top = (s) => ((minutesOf(s) - lo * 60) / 60) * PX_PER_HOUR;
-  const height = (a, b) => Math.max(18, ((minutesOf(b) - minutesOf(a)) / 60) * PX_PER_HOUR - 2);
+  const top = (s: string): number => ((minutesOf(s) - lo * 60) / 60) * PX_PER_HOUR;
+  const height = (a: string, b: string): number => Math.max(18, ((minutesOf(b) - minutesOf(a)) / 60) * PX_PER_HOUR - 2);
 
   return (
     <div className="week-scroll">
-      <div className="week" style={{ '--hours': hours.length, '--pxh': `${PX_PER_HOUR}px` }}>
+      <div className="week" style={{ '--hours': hours.length, '--pxh': `${PX_PER_HOUR}px` } as CSSProperties}>
         <div className="week-corner" />
         {days.map((d) => (
           <div key={d} className={`week-dayhead ${d === today ? 'is-today' : ''}`}>
@@ -66,19 +86,19 @@ export default function WeekGrid({ start, items = [], slots = [], onSlot, today,
   );
 }
 
-export function WeekNav({ start, onChange, min, max }) {
+export function WeekNav({ start, onChange, min, max }: { start: string; onChange: (d: string) => void; min?: string; max?: string }) {
   const end = addDays(start, 6);
   const label = `${new Date(`${start}T00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} – ${new Date(`${end}T00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`;
   return (
     <div className="week-nav">
-      <button className="btn" onClick={() => onChange(addDays(start, -7))} disabled={min && start <= min} aria-label="Previous week">‹</button>
+      <button className="btn" onClick={() => onChange(addDays(start, -7))} disabled={!!min && start <= min} aria-label="Previous week">‹</button>
       <strong>{label}</strong>
-      <button className="btn" onClick={() => onChange(addDays(start, 7))} disabled={max && addDays(start, 7) > max} aria-label="Next week">›</button>
+      <button className="btn" onClick={() => onChange(addDays(start, 7))} disabled={!!max && addDays(start, 7) > max} aria-label="Next week">›</button>
     </div>
   );
 }
 
-export function Legend({ items }) {
+export function Legend({ items }: { items: [ItemKind, string][] }) {
   return (
     <div className="legend">
       {items.map(([kind, label]) => <span key={kind}><i className={`ev-${kind}`} />{label}</span>)}

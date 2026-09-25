@@ -2,10 +2,9 @@
 // tutor's timezone. Arithmetic is done by treating them as UTC so DST never shifts
 // a 4:30pm session to 3:30pm.
 
-/** "YYYY-MM-DD" */
-export type DateStr = string;
-/** "YYYY-MM-DDTHH:MM" local wall-clock time */
-export type DateTimeStr = string;
+import type { DateStr, DateTimeStr } from '../types.ts';
+
+export type { DateStr, DateTimeStr };
 
 export const TZ = process.env.TZ_NAME || 'America/Los_Angeles';
 

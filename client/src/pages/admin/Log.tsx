@@ -1,16 +1,18 @@
 import { useState } from 'react';
+import type { SessionView } from '../../../../server/types.ts';
+import type { StudentListItem, TutoringLog } from '../../../../server/api-types.ts';
 import { get } from '../../api.ts';
-import { durationMin, fmtWhen, money, useLoad } from '../../util.ts';
+import { durationMin, fmtWhen, money, useLoad, type FieldEvent } from '../../util.ts';
 import SessionModal from '../../components/SessionModal.tsx';
 import { ErrorText, Loading, Stat } from '../../components/ui.tsx';
 
 export default function Log() {
   const [q, setQ] = useState({ from: '', to: '', student_id: '', paid: '' });
   const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v)).toString();
-  const { data, error, reload } = useLoad(() => get(`/admin/log?${qs}`), [qs]);
-  const { data: students } = useLoad(() => get('/admin/students'));
-  const [open, setOpen] = useState(null);
-  const set = (k) => (e) => setQ({ ...q, [k]: e.target.value });
+  const { data, error, reload } = useLoad(() => get<TutoringLog>(`/admin/log?${qs}`), [qs]);
+  const { data: students } = useLoad(() => get<StudentListItem[]>('/admin/students'));
+  const [open, setOpen] = useState<SessionView | null>(null);
+  const set = (k: keyof typeof q) => (e: FieldEvent) => setQ({ ...q, [k]: e.target.value });
 
   return (
     <div className="page">

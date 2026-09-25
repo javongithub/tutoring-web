@@ -2,10 +2,14 @@ import { type Request, Router } from 'express';
 import type { SQLInputValue } from 'node:sqlite';
 import { type DB, all as qAll, one as q1 } from '../db.ts';
 import type {
-  CalendarEventRow, ChangeView, CountRow, MoneyRow, ReportRow, RuleRow, SessionRow, SessionView, StudentRow,
+  CalendarEventRow, ChangeView, CountRow, MoneyRow, ReportRow, RuleRow, SessionRow, SessionView, StudentRow, WeeklyRow,
 } from '../types.ts';
 import type { Notifier } from '../lib/notify.ts';
 import type { Reporter } from '../lib/reports.ts';
+import type {
+  Audit, Cancellations, CancellationStat, Dashboard, InvoiceListItem, InvoicesPage, SettingsPage, StudentDetail,
+  StudentListItem, StudentStats, TutoringLog, TutoringSeries, WeekSessions,
+} from '../api-types.ts';
 import { type SettingKey, getSettings, newToken, DEFAULT_SETTINGS, run, scalar, tx } from '../db.ts';
 import {
   addDays, addMinutes, fmtWhen, isDate, isDateTime, isTime, minutesBetween, nowLocal, today, weekStart, toMs,
@@ -69,7 +73,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     const t = today();
     const wk = weekStart(t);
     const month = `${t.slice(0, 7)}-01`;
-    const sum = (from: string, to: string) => one<MoneyRow>(
+    const sum = (from: string, to: string) => scalar<MoneyRow>(db,
       `SELECT COUNT(*) AS n, COALESCE(SUM(rate_cents), 0) AS cents FROM sessions s
         WHERE ${BILLABLE} AND start_at >= ? AND start_at < ?`, `${from}T00:00`, `${to}T00:00`,
     );
@@ -80,8 +84,8 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
         week: sum(wk, addDays(wk, 7)),
         month: sum(month, nextMonth),
         all_time: sum('0000-01-01', '9999-01-01'),
-        unpaid: one(`SELECT COUNT(*) AS n, COALESCE(SUM(rate_cents), 0) AS cents FROM sessions s WHERE ${BILLABLE} AND paid = 0`),
-        scheduled_week: one(
+        unpaid: scalar<MoneyRow>(db, `SELECT COUNT(*) AS n, COALESCE(SUM(rate_cents), 0) AS cents FROM sessions s WHERE ${BILLABLE} AND paid = 0`),
+        scheduled_week: scalar<MoneyRow>(db,
           `SELECT COUNT(*) AS n, COALESCE(SUM(rate_cents), 0) AS cents FROM sessions s
             WHERE status IN ('confirmed','completed') AND start_at >= ? AND start_at < ?`,
           `${wk}T00:00`, `${addDays(wk, 7)}T00:00`,
@@ -92,7 +96,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
       needs_log: all(`${SESSION_SELECT} WHERE s.status = 'confirmed' AND s.end_at <= ? ORDER BY s.start_at DESC LIMIT 50`, now),
       upcoming: all(`${SESSION_SELECT} WHERE s.status = 'confirmed' AND s.end_at > ? ORDER BY s.start_at LIMIT 12`, now),
       recent_cancels: all(`${SESSION_SELECT} WHERE s.status = 'cancelled' ORDER BY s.cancelled_at DESC LIMIT 5`),
-    });
+    } satisfies Dashboard);
   });
 
   // ---------- Sessions ----------
@@ -102,10 +106,10 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     const where = ['s.start_at < ?', 's.end_at > ?'];
     const args: SQLInputValue[] = [`${to}T00:00`, `${from}T00:00`];
     if (req.query.student_id) { where.push('s.student_id = ?'); args.push(int(req.query.student_id)); }
-    const sessions = all(`${SESSION_SELECT} WHERE ${where.join(' AND ')} ORDER BY s.start_at`, ...args);
-    const calendar = all('SELECT * FROM calendar_events WHERE start_at < ? AND end_at > ? ORDER BY start_at', ...args.slice(0, 2));
-    const blocks = all('SELECT * FROM blocks');
-    res.json({ sessions, calendar, blocks });
+    const sessions = all<SessionView>(`${SESSION_SELECT} WHERE ${where.join(' AND ')} ORDER BY s.start_at`, ...args);
+    const calendar = all<CalendarEventRow>('SELECT * FROM calendar_events WHERE start_at < ? AND end_at > ? ORDER BY start_at', ...args.slice(0, 2));
+    const blocks = all<WeeklyRow>('SELECT * FROM blocks');
+    res.json({ sessions, calendar, blocks } satisfies WeekSessions);
   });
 
   r.post('/sessions', (req, res) => {
@@ -353,11 +357,11 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     res.json({
       period,
       preview: invoicePreview(db, period),
-      invoices: all(`SELECT i.*, st.name AS student_name, st.email,
+      invoices: all<InvoiceListItem>(`SELECT i.*, st.name AS student_name, st.email,
                        (SELECT COUNT(*) FROM sessions WHERE invoice_id = i.id) AS sessions
                      FROM invoices i JOIN students st ON st.id = i.student_id
                      WHERE i.period = ? OR i.status = 'open' ORDER BY i.period DESC, st.name COLLATE NOCASE`, period),
-    });
+    } satisfies InvoicesPage);
   });
 
   r.post('/invoices', (req, res) => {
@@ -404,7 +408,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     res.json({
       events: all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 100'),
       failed_logins_24h: scalar<CountRow>(db, "SELECT COUNT(*) AS n FROM audit_log WHERE action IN ('login.failed','login.blocked') AND at > datetime('now', '-1 day')").n,
-    });
+    } satisfies Audit);
   });
 
   // Invalidates every admin session everywhere (including this one): use if a device is lost.
@@ -513,7 +517,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
   };
 
   r.get('/students', (_req, res) => {
-    res.json(all(`
+    res.json(all<StudentListItem>(`
       SELECT st.*,
         (SELECT COUNT(*) FROM sessions s WHERE s.student_id = st.id AND s.status = 'completed') AS completed,
         (SELECT COUNT(*) FROM sessions s WHERE s.student_id = st.id AND s.status = 'cancelled' AND s.cancelled_by = 'client') AS client_cancels,
@@ -543,7 +547,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
         st.id, nowLocal()),
       upcoming: all(`${SESSION_SELECT} WHERE s.student_id = ? AND s.status = 'confirmed' AND s.start_at > ? ORDER BY s.start_at LIMIT 8`,
         st.id, nowLocal()),
-      stats: one(`
+      stats: scalar<StudentStats>(db, `
         SELECT
           SUM(status = 'completed') AS completed,
           SUM(status = 'cancelled' AND cancelled_by = 'client') AS client_cancels,
@@ -553,7 +557,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
           COALESCE(SUM(CASE WHEN ${BILLABLE.replaceAll('s.', '')} THEN rate_cents END), 0) AS earned_cents,
           COALESCE(SUM(CASE WHEN ${BILLABLE.replaceAll('s.', '')} AND paid = 0 THEN rate_cents END), 0) AS unpaid_cents
         FROM sessions WHERE student_id = ?`, st.id),
-    });
+    } satisfies StudentDetail);
   });
 
   r.patch('/students/:id', (req, res) => {
@@ -661,7 +665,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
         earned_cents: billable.reduce((c, x) => c + x.rate_cents, 0),
         unpaid_cents: billable.filter((x) => !x.paid).reduce((c, x) => c + x.rate_cents, 0),
       },
-    });
+    } satisfies TutoringLog);
   });
 
   r.get('/log.csv', (req, res) => {
@@ -685,7 +689,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
     res.json({
       rows: all(`${SESSION_SELECT} WHERE s.status IN ('cancelled','declined','no_show') AND s.start_at >= ? AND s.start_at < ?
                  ORDER BY COALESCE(s.cancelled_at, s.start_at) DESC`, ...args),
-      by_student: all(`
+      by_student: all<CancellationStat>(`
         SELECT st.id, st.name,
           SUM(s.status = 'cancelled' AND s.cancelled_by = 'client') AS client_cancels,
           SUM(s.status = 'cancelled' AND s.cancelled_by = 'client' AND s.late_cancel = 1) AS late_cancels,
@@ -698,7 +702,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
         GROUP BY st.id HAVING client_cancels + no_shows + tutor_cancels > 0
         ORDER BY client_cancels + no_shows DESC`, ...args),
       from, to,
-    });
+    } satisfies Cancellations);
   });
 
   // ---------- Settings, availability, blocked times ----------
@@ -710,7 +714,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
       gcal_service_account: gcalEmail,
       availability: all('SELECT * FROM availability ORDER BY weekday, start_time'),
       blocks: all('SELECT * FROM blocks ORDER BY weekday, start_time'),
-    });
+    } satisfies SettingsPage);
   });
 
   r.put('/settings', (req, res) => {
@@ -814,7 +818,7 @@ export default function adminRoutes(db: DB, { gcalEmail = null, onChange = () =>
       }
       series.get(key)!.count++;
     }
-    res.json([...series.values()].sort((a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time)));
+    res.json(([...series.values()] satisfies TutoringSeries[]).sort((a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time)));
   });
 
   // Import selected calendar series: reuse a student with the same name or create one.

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { Slot } from '../../../../server/types.ts';
+import type { FamilyPage, PublicSession } from '../../../../server/api-types.ts';
 import { Link, useParams } from 'react-router-dom';
 import { get, post } from '../../api.ts';
 import { STATUS_LABEL, fmtWhen, money, useLoad } from '../../util.ts';
@@ -8,9 +10,9 @@ import { ErrorText, Loading, Modal, StatusPill, useAction } from '../../componen
 
 export default function Family() {
   const { token } = useParams();
-  const { data, error, reload } = useLoad(() => get(`/public/family/${token}`), [token]);
-  const [changing, setChanging] = useState(null);
-  const [booking, setBooking] = useState(null);
+  const { data, error, reload } = useLoad(() => get<FamilyPage>(`/public/family/${token}`), [token]);
+  const [changing, setChanging] = useState<PublicSession | null>(null);
+  const [booking, setBooking] = useState<Slot | null>(null);
   const [gridKey, setGridKey] = useState(0);
   const [showAll, setShowAll] = useState(false);
   const act = useAction();
@@ -19,7 +21,8 @@ export default function Family() {
   if (error) return <div className="public"><ErrorText error={error} /></div>;
   if (!data) return <div className="public"><Loading /></div>;
 
-  const book = (message) => act.run(async () => {
+  const book = (message: string) => act.run(async () => {
+    if (!booking) return;
     await post('/public/requests', { start_at: booking.start_at, family: token, message });
     setBooking(null);
     refresh();
@@ -115,7 +118,9 @@ export default function Family() {
   );
 }
 
-function BookExtra({ slot, onClose, onBook, busy, error }) {
+function BookExtra({ slot, onClose, onBook, busy, error }: {
+  slot: Slot; onClose: () => void; onBook: (message: string) => void; busy: boolean; error: Error | null;
+}) {
   const [msg, setMsg] = useState('');
   return (
     <Modal title="Request an extra session" onClose={onClose}>

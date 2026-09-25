@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { SessionView } from '../../../server/types.ts';
 import { del, patch, post } from '../api.ts';
 import { STATUS_LABEL, copy, durationMin, fmtDate, fmtRange, money } from '../util.ts';
 import { ErrorText, Modal, StatusPill, useAction } from './ui.tsx';
 
 // Everything you can do to one session: log it, cancel, no-show, move, mark paid,
 // approve/decline a website request.
-export default function SessionModal({ session: s, onClose, onChanged }) {
+type Done = (fn: () => Promise<unknown>) => void;
+interface FormProps { s: SessionView; onSave: (body: Record<string, unknown>) => void; onBack: () => void; busy: boolean }
+
+export default function SessionModal({ session: s, onClose, onChanged }: { session: SessionView; onClose: () => void; onChanged: () => void }) {
   const [mode, setMode] = useState(s.status === 'confirmed' && s.end_at <= nowish() ? 'log' : 'view');
   const { busy, error, run } = useAction();
-  const done = (fn) => run(async () => { await fn(); onChanged(); onClose(); });
+  const done: Done = (fn) => { void run(async () => { await fn(); onChanged(); onClose(); }); };
   const who = s.student_name || s.requester_student || 'New student';
 
   return (
@@ -65,12 +69,12 @@ export default function SessionModal({ session: s, onClose, onChanged }) {
   );
 }
 
-const nowish = () => {
-  const d = new Date(); const p = (n) => String(n).padStart(2, '0');
+const nowish = (): string => {
+  const d = new Date(); const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-function PendingPanel({ s, done, busy }) {
+function PendingPanel({ s, done, busy }: { s: SessionView; done: Done; busy: boolean }) {
   const [weekly, setWeekly] = useState(false);
   return (
     <div className="request">
@@ -90,7 +94,7 @@ function PendingPanel({ s, done, busy }) {
   );
 }
 
-function LogSummary({ s }) {
+function LogSummary({ s }: { s: SessionView }) {
   return (
     <dl className="kv">
       <dt>Covered</dt><dd>{s.topics || <span className="muted">—</span>}</dd>
@@ -100,7 +104,7 @@ function LogSummary({ s }) {
   );
 }
 
-function LogForm({ s, onSave, onBack, busy }) {
+function LogForm({ s, onSave, onBack, busy }: FormProps) {
   const [f, setF] = useState({ topics: s.topics, notes: s.notes, next_plan: s.next_plan });
   return (
     <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
@@ -118,8 +122,8 @@ function LogForm({ s, onSave, onBack, busy }) {
   );
 }
 
-function CancelForm({ s, onSave, onBack, busy }) {
-  const [by, setBy] = useState('client');
+function CancelForm({ s, onSave, onBack, busy }: FormProps) {
+  const [by, setBy] = useState<'client' | 'tutor'>('client');
   const [reason, setReason] = useState('');
   const [charged, setCharged] = useState(false);
   const [notify, setNotify] = useState(true);
@@ -141,7 +145,7 @@ function CancelForm({ s, onSave, onBack, busy }) {
   );
 }
 
-function MoveForm({ s, onSave, onBack, busy }) {
+function MoveForm({ s, onSave, onBack, busy }: FormProps) {
   const [start, setStart] = useState(s.start_at);
   const [dur, setDur] = useState(durationMin(s.start_at, s.end_at));
   const [notify, setNotify] = useState(true);
@@ -149,7 +153,7 @@ function MoveForm({ s, onSave, onBack, busy }) {
     <form className="form" onSubmit={(e) => { e.preventDefault(); onSave({ start_at: start, duration_min: Number(dur), notify }); }}>
       <div className="grid2">
         <label className="field"><span>New start</span><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required /></label>
-        <label className="field"><span>Minutes</span><input type="number" min={15} max={480} step={15} value={dur} onChange={(e) => setDur(e.target.value)} /></label>
+        <label className="field"><span>Minutes</span><input type="number" min={15} max={480} step={15} value={dur} onChange={(e) => setDur(Number(e.target.value))} /></label>
       </div>
       <label className="check"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> Email the family about the new time</label>
       {s.recurring_id && <p className="hint">Moves only this week. Edit the weekly schedule on the student&rsquo;s page to change every week.</p>}
@@ -161,7 +165,7 @@ function MoveForm({ s, onSave, onBack, busy }) {
   );
 }
 
-function FamilyLink({ token }) {
+function FamilyLink({ token }: { token: string }) {
   const [copied, setCopied] = useState(false);
   const url = `${window.location.origin}/booking/${token}`;
   return (

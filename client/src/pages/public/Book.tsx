@@ -1,24 +1,27 @@
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
+import type { Slot } from '../../../../server/types.ts';
+import type { PublicInfo } from '../../../../server/api-types.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { get, post } from '../../api.ts';
-import { DAYS, fmtWhen, money, useLoad } from '../../util.ts';
+import { DAYS, fmtWhen, money, useLoad, type FieldEvent } from '../../util.ts';
 import PublicWeek from '../../components/PublicWeek.tsx';
 import { ErrorText, useAction } from '../../components/ui.tsx';
 
 export default function Book() {
-  const { data: info } = useLoad(() => get('/public/info'));
-  const [slot, setSlot] = useState(null);
+  const { data: info } = useLoad(() => get<PublicInfo>('/public/info'));
+  const [slot, setSlot] = useState<Slot | null>(null);
   const [f, setF] = useState({ parent_name: '', student_name: '', email: '', phone: '', message: '', website: '' });
   const { busy, error, run } = useAction();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const week = /^\d{4}-\d{2}-\d{2}$/.test(params.get('week') || '') ? params.get('week') : null;
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: e.target.value });
 
-  const submit = (e) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    run(async () => {
-      const { token } = await post('/public/requests', { ...f, start_at: slot.start_at });
+    if (!slot) return;
+    void run(async () => {
+      const { token } = await post<{ token: string }>('/public/requests', { ...f, start_at: slot.start_at });
       nav(`/booking/${token}`);
     });
   };
@@ -68,11 +71,11 @@ export default function Book() {
 
 function Waitlist() {
   const [f, setF] = useState({ parent_name: '', student_name: '', email: '', phone: '', note: '', website: '' });
-  const [days, setDays] = useState([]);
+  const [days, setDays] = useState<number[]>([]);
   const [done, setDone] = useState(false);
   const { busy, error, run } = useAction();
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const toggle = (d) => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]);
+  const set = (k: keyof typeof f) => (e: FieldEvent) => setF({ ...f, [k]: e.target.value });
+  const toggle = (d: number) => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d]);
   if (done) {
     return <section className="card"><h2>You&rsquo;re on the waitlist ✓</h2><p>We&rsquo;ll email you the moment a time opens up. Check your inbox for a confirmation.</p></section>;
   }

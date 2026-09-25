@@ -1,18 +1,11 @@
 // Monthly invoices: one per family per month, covering sessions that were done (or
 // billed as late cancels / no-shows) and not yet paid.
 import { type DB, all, getSettings, newToken, one, run, scalar, tx } from '../db.ts';
-import type { InvoiceRow, SessionRow } from '../types.ts';
+import type { InvoicePreview, InvoiceRow, SessionRow } from '../types.ts';
 import type { Notifier } from './notify.ts';
 import { type DateStr, addDays, fmtWhen, nowLocal, today } from './time.ts';
 
-export interface InvoicePreview {
-  student_id: number;
-  name: string;
-  parent_name: string;
-  email: string;
-  sessions: number;
-  amount_cents: number;
-}
+export type { InvoicePreview };
 export interface InvoiceDetail extends InvoiceRow {
   student_name: string;
   parent_name: string;

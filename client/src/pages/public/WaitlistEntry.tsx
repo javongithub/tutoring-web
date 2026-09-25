@@ -1,11 +1,12 @@
 import { useParams } from 'react-router-dom';
+import type { PublicWaitlistEntry } from '../../../../server/api-types.ts';
 import { get, post } from '../../api.ts';
 import { DAYS, useLoad } from '../../util.ts';
 import { ErrorText, Loading, useAction } from '../../components/ui.tsx';
 
 export default function WaitlistEntry() {
   const { token } = useParams();
-  const { data, error, reload } = useLoad(() => get(`/public/waitlist/${token}`), [token]);
+  const { data, error, reload } = useLoad(() => get<PublicWaitlistEntry>(`/public/waitlist/${token}`), [token]);
   const act = useAction();
   if (error) return <div className="public narrow"><ErrorText error={error} /></div>;
   if (!data) return <div className="public narrow"><Loading /></div>;

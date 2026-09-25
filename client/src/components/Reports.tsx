@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReportRow, StudentRow } from '../../../server/types.ts';
 import { del, patch, post } from '../api.ts';
 import { addDays, copy } from '../util.ts';
 import { ErrorText, StatusPill, useAction } from './ui.tsx';
@@ -6,10 +7,12 @@ import { ErrorText, StatusPill, useAction } from './ui.tsx';
 const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 // Progress reports for one student: draft (AI or manual), edit, send to the family.
-export default function ReportsCard({ st, reports, aiEnabled, onChanged }) {
+export default function ReportsCard({ st, reports, aiEnabled, onChanged }: {
+  st: StudentRow; reports: ReportRow[]; aiEnabled: boolean; onChanged: () => void;
+}) {
   const [range, setRange] = useState({ from: addDays(todayLocal(), -30), to: todayLocal() });
   const act = useAction();
-  const create = (ai) => act.run(async () => { await post(`/admin/students/${st.id}/reports`, { ...range, ai }); onChanged(); });
+  const create = (ai: boolean) => act.run(async () => { await post(`/admin/students/${st.id}/reports`, { ...range, ai }); onChanged(); });
   return (
     <section className="card">
       <h2>Progress reports</h2>
@@ -25,12 +28,12 @@ export default function ReportsCard({ st, reports, aiEnabled, onChanged }) {
         <button className="btn" disabled={act.busy} onClick={() => create(false)}>Write manually</button>
       </div>
       <ErrorText error={act.error} />
-      {reports.map((r) => <ReportRow key={r.id} r={r} onChanged={onChanged} />)}
+      {reports.map((r) => <ReportItem key={r.id} r={r} onChanged={onChanged} />)}
     </section>
   );
 }
 
-function ReportRow({ r, onChanged }) {
+function ReportItem({ r, onChanged }: { r: ReportRow; onChanged: () => void }) {
   const [body, setBody] = useState(r.body);
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(r.status === 'draft');
@@ -41,7 +44,7 @@ function ReportRow({ r, onChanged }) {
     <div className="report">
       <div className="report-head" onClick={() => setOpen(!open)}>
         <strong>{r.period_from} → {r.period_to}</strong>{' '}
-        <StatusPill status={r.status === 'sent' ? 'paid' : 'pending'}>{r.status === 'sent' ? `Sent ${r.sent_at.slice(0, 10)}` : 'Draft'}</StatusPill>
+        <StatusPill status={r.status === 'sent' ? 'paid' : 'pending'}>{r.status === 'sent' ? `Sent ${r.sent_at?.slice(0, 10)}` : 'Draft'}</StatusPill>
         {r.source === 'ai' && <span className="tag">AI draft</span>}
       </div>
       {open && (r.status === 'draft' ? (
